@@ -136,6 +136,17 @@
         speichereDaten();
         aktualisiereAnzeige();
       });
+      knoten.querySelector(".stunden-plus-btn").addEventListener("click", function () {
+        var eingabe = prompt("Wie viele Stunden für \"" + zeile.adresse + "\" hinzufügen?", "");
+        if (eingabe === null) return;
+        var hinzu = zahl(eingabe);
+        if (hinzu <= 0) return;
+        var neu = Math.round((zahl(zeile.stunden) + hinzu) * 100) / 100;
+        zeile.stunden = String(neu);
+        stundenInput.value = zeile.stunden;
+        speichereDaten();
+        aktualisiereAnzeige();
+      });
       knoten.querySelector(".loeschen-btn").addEventListener("click", function () {
         if (!confirm('"' + zeile.adresse + '" wirklich löschen?')) return;
         daten.adressen = daten.adressen.filter(function (z) {

@@ -206,6 +206,33 @@ input:focus-visible {
   margin-top: 0.3rem;
 }
 
+.stunden-eingabe-zeile {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+}
+
+.stunden-eingabe-zeile input {
+  margin-top: 0;
+}
+
+.stunden-plus-btn {
+  flex-shrink: 0;
+  width: 2.4rem;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.stunden-plus-btn:hover {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
 .zeile-gesamt {
   margin: 0.6rem 0 0;
   text-align: right;
