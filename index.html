@@ -36,6 +36,11 @@
 </header>
 
 <main>
+  <p id="speicher-fehler-hinweis" class="hinweis fehler-hinweis" hidden>
+    Speichern hat nicht geklappt (z. B. privater Modus oder voller Speicher).
+    Eingaben bleiben nur bis zum Schließen der Seite erhalten.
+  </p>
+
   <section class="card">
     <label class="wage-row">
       <span>Abrechnungszeitraum</span>
@@ -93,6 +98,10 @@
         <span class="stunden-eingabe-zeile">
           <input type="number" class="stunden-input" min="0" step="0.25" inputmode="decimal">
           <button type="button" class="stunden-plus-btn" aria-label="Stunden hinzufügen">+</button>
+        </span>
+        <span class="stunden-hinzufuegen-zeile" hidden>
+          <input type="number" class="stunden-hinzufuegen-input" min="0" step="0.25" inputmode="decimal" placeholder="dazu …">
+          <button type="button" class="stunden-hinzufuegen-ok">OK</button>
         </span>
       </label>
       <label>

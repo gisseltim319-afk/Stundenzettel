@@ -69,6 +69,39 @@
     return div.innerHTML;
   }
 
+  /**
+   * Macht aus einem Klick eine Zwei-Schritte-Bestätigung, ohne natives
+   * confirm(): manche als installierte App gestartete Browser ignorieren
+   * confirm()/prompt() lautlos, sodass gar nichts passiert. Erster Klick
+   * "bewaffnet" den Knopf (Text wechselt, class confirm-armiert), zweiter
+   * Klick innerhalb von 3 Sekunden führt die Aktion aus; sonst fällt der
+   * Knopf von selbst zurück.
+   */
+  function mitBestaetigung(button, bestaetigungsText, aktion) {
+    var urText = button.textContent;
+    var armiert = false;
+    var timeoutId = null;
+
+    button.addEventListener("click", function () {
+      if (armiert) {
+        armiert = false;
+        clearTimeout(timeoutId);
+        button.textContent = urText;
+        button.classList.remove("confirm-armiert");
+        aktion();
+        return;
+      }
+      armiert = true;
+      button.textContent = bestaetigungsText;
+      button.classList.add("confirm-armiert");
+      timeoutId = setTimeout(function () {
+        armiert = false;
+        button.textContent = urText;
+        button.classList.remove("confirm-armiert");
+      }, 3000);
+    });
+  }
+
   function ladeDaten() {
     try {
       var roh = localStorage.getItem(SPEICHER_SCHLUESSEL);
@@ -84,20 +117,14 @@
   }
 
   var daten = ladeDaten();
-  var speichernFehlerGezeigt = false;
 
   function speichereDaten() {
     try {
       localStorage.setItem(SPEICHER_SCHLUESSEL, JSON.stringify(daten));
     } catch (fehler) {
       console.warn("Daten konnten nicht gespeichert werden.", fehler);
-      if (!speichernFehlerGezeigt) {
-        speichernFehlerGezeigt = true;
-        alert(
-          "Speichern hat nicht geklappt (z. B. privater Modus oder voller Speicher). " +
-            "Eingaben bleiben nur bis zum Schließen der Seite erhalten."
-        );
-      }
+      var hinweis = document.getElementById("speicher-fehler-hinweis");
+      if (hinweis) hinweis.hidden = false;
     }
   }
 
@@ -136,19 +163,35 @@
         speichereDaten();
         aktualisiereAnzeige();
       });
+      var hinzuZeile = knoten.querySelector(".stunden-hinzufuegen-zeile");
+      var hinzuInput = knoten.querySelector(".stunden-hinzufuegen-input");
+
+      function stundenHinzufuegenAnwenden() {
+        var hinzu = zahl(hinzuInput.value);
+        if (hinzu > 0) {
+          var neu = Math.round((zahl(zeile.stunden) + hinzu) * 100) / 100;
+          zeile.stunden = String(neu);
+          stundenInput.value = zeile.stunden;
+          speichereDaten();
+          aktualisiereAnzeige();
+        }
+        hinzuInput.value = "";
+        hinzuZeile.hidden = true;
+      }
+
       knoten.querySelector(".stunden-plus-btn").addEventListener("click", function () {
-        var eingabe = prompt("Wie viele Stunden für \"" + zeile.adresse + "\" hinzufügen?", "");
-        if (eingabe === null) return;
-        var hinzu = zahl(eingabe);
-        if (hinzu <= 0) return;
-        var neu = Math.round((zahl(zeile.stunden) + hinzu) * 100) / 100;
-        zeile.stunden = String(neu);
-        stundenInput.value = zeile.stunden;
-        speichereDaten();
-        aktualisiereAnzeige();
+        hinzuZeile.hidden = !hinzuZeile.hidden;
+        if (!hinzuZeile.hidden) hinzuInput.focus();
       });
-      knoten.querySelector(".loeschen-btn").addEventListener("click", function () {
-        if (!confirm('"' + zeile.adresse + '" wirklich löschen?')) return;
+      knoten.querySelector(".stunden-hinzufuegen-ok").addEventListener("click", stundenHinzufuegenAnwenden);
+      hinzuInput.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          stundenHinzufuegenAnwenden();
+        }
+      });
+
+      mitBestaetigung(knoten.querySelector(".loeschen-btn"), "Wirklich?", function () {
         daten.adressen = daten.adressen.filter(function (z) {
           return z.id !== zeile.id;
         });
@@ -239,8 +282,7 @@
     aktualisiereAnzeige();
   });
 
-  document.getElementById("zuruecksetzen-btn").addEventListener("click", function () {
-    if (!confirm("Stunden und Materialkosten für alle Adressen auf 0 zurücksetzen?")) return;
+  mitBestaetigung(document.getElementById("zuruecksetzen-btn"), "Wirklich alle auf 0?", function () {
     daten.adressen.forEach(function (z) {
       z.stunden = 0;
       z.materialkosten = 0;

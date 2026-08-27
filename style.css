@@ -10,6 +10,7 @@
   --accent-foreground: #ffffff;
   --accent-soft: #e8e8fb;
   --danger: #ae3131;
+  --danger-soft: #fbe8e6;
   --radius: 14px;
   color-scheme: light;
 }
@@ -32,6 +33,7 @@
     --accent-foreground: #10111a;
     --accent-soft: rgba(141, 146, 247, 0.16);
     --danger: #f0807c;
+    --danger-soft: rgba(240, 128, 124, 0.14);
     color-scheme: dark;
   }
 }
@@ -48,6 +50,7 @@
   --accent-foreground: #10111a;
   --accent-soft: rgba(141, 146, 247, 0.16);
   --danger: #f0807c;
+  --danger-soft: rgba(240, 128, 124, 0.14);
   color-scheme: dark;
 }
 
@@ -231,6 +234,46 @@ input:focus-visible {
 .stunden-plus-btn:hover {
   background: var(--accent);
   color: var(--accent-foreground);
+}
+
+/* :not([hidden]) statt display hier direkt zu setzen, weil eine
+   Klassen-Regel für "display" sonst gleich stark wie [hidden] { display:
+   none } wiegt und - da später im Stylesheet - das Verstecken lautlos
+   aushebeln würde. */
+.stunden-hinzufuegen-zeile:not([hidden]) {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+
+.stunden-hinzufuegen-zeile input {
+  margin-top: 0;
+  min-width: 0;
+}
+
+.stunden-hinzufuegen-ok {
+  flex-shrink: 0;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  border: none;
+  border-radius: 10px;
+  padding: 0 0.9rem;
+  font-weight: 600;
+}
+
+/* Zwei-Schritte-Bestätigung statt nativer confirm()-Dialoge, die in
+   mancher installierten PWA lautlos ignoriert werden: erster Klick
+   "bewaffnet" den Knopf (dieser Zustand), zweiter Klick führt aus. */
+.confirm-armiert {
+  color: var(--danger) !important;
+  font-weight: 600;
+}
+
+.fehler-hinweis {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-radius: 10px;
+  padding: 0.6rem 0.75rem;
 }
 
 .zeile-gesamt {
