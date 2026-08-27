@@ -709,19 +709,25 @@
 
     doc.setFont("helvetica", "normal");
     var summe = 0;
+    var summeStunden = 0;
+    var summeMaterial = 0;
     var belegBloecke = [];
     daten.adressen.forEach(function (adresse) {
       var eintrag = holeEintrag(adresse.id);
-      var gesamt = zahl(eintrag.stunden) * lohn + zahl(eintrag.materialkosten);
+      var stunden = zahl(eintrag.stunden);
+      var material = zahl(eintrag.materialkosten);
+      var gesamt = stunden * lohn + material;
       summe += gesamt;
+      summeStunden += stunden;
+      summeMaterial += material;
 
       if (y > SEITENHOEHE - RAND - 20) {
         doc.addPage();
         y = RAND;
       }
       doc.text(adresse.adresse, RAND, y);
-      doc.text(zahl(eintrag.stunden).toFixed(2).replace(".", ","), STUNDEN_X, y, { align: "right" });
-      doc.text(euro(zahl(eintrag.materialkosten)), MATERIAL_X, y, { align: "right" });
+      doc.text(stunden.toFixed(2).replace(".", ","), STUNDEN_X, y, { align: "right" });
+      doc.text(euro(material), MATERIAL_X, y, { align: "right" });
       doc.text(euro(gesamt), GESAMT_X, y, { align: "right" });
       y += 20;
 
@@ -735,7 +741,9 @@
     y += 20;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
-    doc.text("Gesamtsumme", MATERIAL_X, y, { align: "right" });
+    doc.text("Gesamtsumme", RAND, y);
+    doc.text(summeStunden.toFixed(2).replace(".", ","), STUNDEN_X, y, { align: "right" });
+    doc.text(euro(summeMaterial), MATERIAL_X, y, { align: "right" });
     doc.text(euro(summe), GESAMT_X, y, { align: "right" });
 
     y += 50;
