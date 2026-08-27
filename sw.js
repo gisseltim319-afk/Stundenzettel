@@ -1,8 +1,10 @@
-// Cache-first App-Shell, damit die Seite nach dem ersten Laden auch offline
-// (z. B. auf der Baustelle ohne Empfang) startet. Alle Daten liegen ohnehin
-// nur in localStorage, nicht auf einem Server – hier geht es nur um die
+// Network-first App-Shell: bei bestehender Verbindung immer die aktuelle
+// Version laden (und den Cache dabei auffrischen), nur ohne Verbindung
+// (z. B. auf der Baustelle ohne Empfang) auf die zuletzt geladene Version
+// aus dem Cache zurückfallen. Alle Nutzdaten liegen ohnehin nur in
+// localStorage, nicht auf einem Server – hier geht es nur um die
 // statischen Dateien selbst.
-var CACHE_NAME = "stundenzettel-cache-v2";
+var CACHE_NAME = "stundenzettel-cache-v3";
 var DATEIEN = [
   "./",
   "./index.html",
@@ -41,22 +43,20 @@ self.addEventListener("fetch", function (event) {
   if (event.request.method !== "GET") return;
 
   event.respondWith(
-    caches.match(event.request).then(function (treffer) {
-      if (treffer) return treffer;
-
-      return fetch(event.request)
-        .then(function (antwort) {
-          if (antwort.ok && antwort.type === "basic") {
-            var kopie = antwort.clone();
-            caches.open(CACHE_NAME).then(function (cache) {
-              cache.put(event.request, kopie);
-            });
-          }
-          return antwort;
-        })
-        .catch(function () {
-          return caches.match("./index.html");
+    fetch(event.request.url, { cache: "no-store" })
+      .then(function (antwort) {
+        if (antwort.ok && antwort.type === "basic") {
+          var kopie = antwort.clone();
+          caches.open(CACHE_NAME).then(function (cache) {
+            cache.put(event.request, kopie);
+          });
+        }
+        return antwort;
+      })
+      .catch(function () {
+        return caches.match(event.request).then(function (treffer) {
+          return treffer || caches.match("./index.html");
         });
-    })
+      })
   );
 });

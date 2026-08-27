@@ -252,6 +252,17 @@
     navigator.serviceWorker.register("sw.js").catch(function () {
       /* Offline-Unterstützung ist ein Bonus, kein Muss – Fehler hier sind unkritisch. */
     });
+
+    // Übernimmt ein neuer Service Worker (z. B. nach einem Update) die
+    // Kontrolle, einmal neu laden - sonst bleibt eine bereits offene Seite/
+    // installierte App auf dem alten Stand hängen, bis sie manuell neu
+    // gestartet wird.
+    var neuGeladenWegenUpdate = false;
+    navigator.serviceWorker.addEventListener("controllerchange", function () {
+      if (neuGeladenWegenUpdate) return;
+      neuGeladenWegenUpdate = true;
+      window.location.reload();
+    });
   }
 
   // Design: folgt standardmäßig der Systemeinstellung ("Automatisch"). Wählt
