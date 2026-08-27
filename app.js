@@ -400,14 +400,14 @@
 
   /** Speichert ein erzeugtes PDF dauerhaft im Archiv (eigener Eintrag pro
    *  Erstellung, damit spätere Korrekturen ältere Versionen nicht überschreiben). */
-  async function archivHinzufuegen(monat, gesamtsumme, blob) {
+  async function archivHinzufuegen(monat, gesamtsumme, datenUrl) {
     var db = await belegeDbOeffnen();
     var eintrag = {
       id: erzeugeId(),
       monat: monat,
       gesamtsumme: gesamtsumme,
       erstellt: new Date().toISOString(),
-      blob: blob,
+      datenUrl: datenUrl,
     };
     return new Promise(function (resolve, reject) {
       var tx = db.transaction(PDF_ARCHIV_STORE, "readwrite");
@@ -634,8 +634,16 @@
         euro(eintrag.gesamtsumme) +
         "</span>";
       button.addEventListener("click", function () {
-        var url = URL.createObjectURL(eintrag.blob);
-        window.open(url, "_blank");
+        fetch(eintrag.datenUrl)
+          .then(function (antwort) {
+            return antwort.blob();
+          })
+          .then(function (blob) {
+            window.open(URL.createObjectURL(blob), "_blank");
+          })
+          .catch(function (fehler) {
+            console.warn("PDF aus der Historie konnte nicht geöffnet werden.", fehler);
+          });
       });
 
       li.appendChild(button);
@@ -800,7 +808,12 @@
       });
     }
 
-    return { blob: doc.output("blob"), gesamtsumme: summe };
+    // Als Data-URL statt Blob zurückgeben: rohe Blob-Objekte lassen sich auf
+    // iOS Safari/WebKit nach dem Ablegen in IndexedDB unzuverlässig wieder
+    // auslesen (Historie-PDFs ließen sich dann nicht öffnen), während ein
+    // Data-URL-String (gleiches Muster wie bei den Beleg-Fotos) verlässlich
+    // gespeichert und wieder abgerufen werden kann.
+    return { datenUrl: doc.output("datauristring"), gesamtsumme: summe };
   }
 
   function monatWechseln() {
@@ -858,12 +871,17 @@
     Promise.resolve()
       .then(function () {
         var ergebnis = erzeugePdf();
-        return archivHinzufuegen(daten.aktuellerMonat, ergebnis.gesamtsumme, ergebnis.blob);
+        return archivHinzufuegen(daten.aktuellerMonat, ergebnis.gesamtsumme, ergebnis.datenUrl);
       })
       .then(function (eintrag) {
         pdfArchivCache.unshift(eintrag);
         historieRendern();
-        window.open(URL.createObjectURL(eintrag.blob), "_blank");
+        return fetch(eintrag.datenUrl).then(function (antwort) {
+          return antwort.blob();
+        });
+      })
+      .then(function (blob) {
+        window.open(URL.createObjectURL(blob), "_blank");
       })
       .catch(function (fehler) {
         console.warn("PDF konnte nicht erstellt werden.", fehler);
