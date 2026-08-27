@@ -14,8 +14,13 @@
   color-scheme: light;
 }
 
+/*
+ * Design-Zustände: System-Einstellung ist der Standard, "Automatisch" im
+ * Auswahlfeld oben rechts. Wählt jemand dort explizit Hell/Dunkel, gewinnt
+ * das über data-theme immer gegen die Systemfarbe (siehe app.js).
+ */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --background: #0b0c12;
     --foreground: #eef0f8;
     --surface: #15161f;
@@ -29,6 +34,21 @@
     --danger: #f0807c;
     color-scheme: dark;
   }
+}
+
+:root[data-theme="dark"] {
+  --background: #0b0c12;
+  --foreground: #eef0f8;
+  --surface: #15161f;
+  --muted: #a7abc2;
+  --subtle: #6f7387;
+  --border: #292b39;
+  --accent: #8d92f7;
+  --accent-strong: #aeb2ff;
+  --accent-foreground: #10111a;
+  --accent-soft: rgba(141, 146, 247, 0.16);
+  --danger: #f0807c;
+  color-scheme: dark;
 }
 
 * {
@@ -49,9 +69,26 @@ body {
   padding: calc(env(safe-area-inset-top) + 1.25rem) 1rem 0.5rem;
 }
 
+.app-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
 .app-header h1 {
   margin: 0;
   font-size: 1.5rem;
+}
+
+.theme-auswahl {
+  font: inherit;
+  font-size: 0.82rem;
+  color: var(--foreground);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
 }
 
 main {
@@ -91,7 +128,8 @@ main {
 }
 
 input[type="number"],
-input[type="text"] {
+input[type="text"],
+input[type="month"] {
   font: inherit;
   font-size: 1rem;
   color: var(--foreground);
@@ -110,6 +148,13 @@ input:focus-visible {
 #stundenlohn {
   width: 6rem;
   text-align: right;
+}
+
+.zeitraum-anzeige {
+  margin: 0.6rem 0 0;
+  text-align: right;
+  font-size: 0.9rem;
+  color: var(--muted);
 }
 
 .adressen-liste {

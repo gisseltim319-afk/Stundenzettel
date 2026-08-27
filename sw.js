@@ -2,7 +2,7 @@
 // (z. B. auf der Baustelle ohne Empfang) startet. Alle Daten liegen ohnehin
 // nur in localStorage, nicht auf einem Server – hier geht es nur um die
 // statischen Dateien selbst.
-var CACHE_NAME = "stundenzettel-cache-v1";
+var CACHE_NAME = "stundenzettel-cache-v2";
 var DATEIEN = [
   "./",
   "./index.html",

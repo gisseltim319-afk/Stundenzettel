@@ -4,6 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Stundenzettel</title>
+<script>
+// Vor dem ersten Rendern anwenden, damit beim Laden kein falsches Design kurz aufblitzt.
+(function () {
+  try {
+    var t = localStorage.getItem("stundenzettel-theme");
+    if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+  } catch (e) {}
+})();
+</script>
 <meta name="description" content="Stunden und Materialkosten pro Adresse eintippen, Gesamtsumme live berechnet, direkt als PDF drucken.">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png" type="image/png">
@@ -16,10 +25,25 @@
 </head>
 <body>
 <header class="app-header">
-  <h1>Stundenzettel</h1>
+  <div class="app-header-row">
+    <h1>Stundenzettel</h1>
+    <select id="theme-auswahl" class="theme-auswahl" aria-label="Design">
+      <option value="system">Automatisch</option>
+      <option value="light">Hell</option>
+      <option value="dark">Dunkel</option>
+    </select>
+  </div>
 </header>
 
 <main>
+  <section class="card">
+    <label class="wage-row">
+      <span>Abrechnungszeitraum</span>
+      <input type="month" id="monat">
+    </label>
+    <p id="zeitraum-anzeige" class="zeitraum-anzeige"></p>
+  </section>
+
   <section class="card">
     <label class="wage-row">
       <span>Stundenlohn</span>

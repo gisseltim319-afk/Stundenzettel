@@ -22,8 +22,14 @@
     return "id-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
   }
 
+  function heutigerMonatWert() {
+    var heute = new Date();
+    return heute.getFullYear() + "-" + String(heute.getMonth() + 1).padStart(2, "0");
+  }
+
   function standardDaten() {
     return {
+      zeitraum: heutigerMonatWert(),
       stundenlohn: 15,
       adressen: STANDARD_ADRESSEN.map(function (adresse) {
         return { id: erzeugeId(), adresse: adresse, stunden: 0, materialkosten: 0 };
@@ -41,6 +47,22 @@
     return EURO.format(n);
   }
 
+  function pad2(n) {
+    return String(n).padStart(2, "0");
+  }
+
+  /** "2026-08" -> "01.08.2026 – 31.08.2026". Leere/ungültige Werte ergeben "". */
+  function zeitraumText(monatWert) {
+    if (!monatWert) return "";
+    var teile = monatWert.split("-");
+    var jahr = Number(teile[0]);
+    var monat = Number(teile[1]);
+    if (!jahr || !monat) return "";
+    var letzterTag = new Date(jahr, monat, 0).getDate();
+    var basis = pad2(monat) + "." + jahr;
+    return "01." + basis + " – " + pad2(letzterTag) + "." + basis;
+  }
+
   function escapeHtml(text) {
     var div = document.createElement("div");
     div.textContent = text;
@@ -53,6 +75,7 @@
       if (!roh) return standardDaten();
       var geparst = JSON.parse(roh);
       if (!geparst || !Array.isArray(geparst.adressen)) return standardDaten();
+      if (!geparst.zeitraum) geparst.zeitraum = heutigerMonatWert();
       return geparst;
     } catch (fehler) {
       console.warn("Gespeicherte Daten konnten nicht gelesen werden, starte mit Standardliste.", fehler);
@@ -78,6 +101,8 @@
     }
   }
 
+  var monatEl = document.getElementById("monat");
+  var zeitraumAnzeigeEl = document.getElementById("zeitraum-anzeige");
   var stundenlohnEl = document.getElementById("stundenlohn");
   var listeEl = document.getElementById("adressen-liste");
   var leerHinweisEl = document.getElementById("leer-hinweis");
@@ -140,15 +165,12 @@
     });
 
     gesamtsummeEl.textContent = euro(summe);
+    zeitraumAnzeigeEl.textContent = zeitraumText(daten.zeitraum);
     baueDruckansicht(lohn, summe);
   }
 
   function baueDruckansicht(lohn, summe) {
-    var heute = new Date().toLocaleDateString("de-DE", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
+    var zeitraum = zeitraumText(daten.zeitraum);
 
     var zeilenHtml = daten.adressen
       .map(function (zeile) {
@@ -168,8 +190,8 @@
       .join("");
 
     druckansichtEl.innerHTML =
-      '<div class="druck-kopf"><h1>Stundenzettel</h1><span>Stand: ' +
-      heute +
+      '<div class="druck-kopf"><h1>Stundenzettel</h1><span>' +
+      zeitraum +
       '</span></div><p class="druck-lohn">Stundenlohn: ' +
       euro(lohn) +
       ' / Stunde</p><table class="druck-tabelle"><thead><tr><th>Adresse</th>' +
@@ -181,6 +203,12 @@
       '</td></tr></tfoot></table><div class="druck-unterschrift">' +
       '<div class="unterschrift-linie"></div><span>Datum, Unterschrift</span></div>';
   }
+
+  monatEl.addEventListener("input", function () {
+    daten.zeitraum = monatEl.value;
+    speichereDaten();
+    aktualisiereAnzeige();
+  });
 
   stundenlohnEl.addEventListener("input", function () {
     daten.stundenlohn = stundenlohnEl.value;
@@ -215,6 +243,7 @@
     window.print();
   });
 
+  monatEl.value = daten.zeitraum;
   stundenlohnEl.value = daten.stundenlohn;
   baueListe();
   aktualisiereAnzeige();
@@ -224,4 +253,36 @@
       /* Offline-Unterstützung ist ein Bonus, kein Muss – Fehler hier sind unkritisch. */
     });
   }
+
+  // Design: folgt standardmäßig der Systemeinstellung ("Automatisch"). Wählt
+  // jemand explizit Hell/Dunkel, gewinnt das dauerhaft (siehe style.css) –
+  // die Grundanwendung passiert schon inline im <head>, hier nur die Anzeige
+  // im Auswahlfeld synchronisieren und auf Änderungen reagieren.
+  var THEME_SCHLUESSEL = "stundenzettel-theme";
+  var themeAuswahlEl = document.getElementById("theme-auswahl");
+
+  function gespeichertesTheme() {
+    try {
+      return localStorage.getItem(THEME_SCHLUESSEL);
+    } catch (fehler) {
+      return null;
+    }
+  }
+
+  themeAuswahlEl.value = gespeichertesTheme() || "system";
+
+  themeAuswahlEl.addEventListener("change", function () {
+    var wert = themeAuswahlEl.value;
+    try {
+      if (wert === "light" || wert === "dark") {
+        localStorage.setItem(THEME_SCHLUESSEL, wert);
+        document.documentElement.setAttribute("data-theme", wert);
+      } else {
+        localStorage.removeItem(THEME_SCHLUESSEL);
+        document.documentElement.removeAttribute("data-theme");
+      }
+    } catch (fehler) {
+      console.warn("Design konnte nicht gespeichert werden.", fehler);
+    }
+  });
 })();
