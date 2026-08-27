@@ -209,17 +209,20 @@ input:focus-visible {
   margin-top: 0.3rem;
 }
 
-.stunden-eingabe-zeile {
+.stunden-eingabe-zeile,
+.material-eingabe-zeile {
   display: flex;
   gap: 0.4rem;
   margin-top: 0.3rem;
 }
 
-.stunden-eingabe-zeile input {
+.stunden-eingabe-zeile input,
+.material-eingabe-zeile input {
   margin-top: 0;
 }
 
-.stunden-plus-btn {
+.stunden-plus-btn,
+.material-plus-btn {
   flex-shrink: 0;
   width: 2.4rem;
   background: var(--accent-soft);
@@ -231,7 +234,8 @@ input:focus-visible {
   line-height: 1;
 }
 
-.stunden-plus-btn:hover {
+.stunden-plus-btn:hover,
+.material-plus-btn:hover {
   background: var(--accent);
   color: var(--accent-foreground);
 }
@@ -240,18 +244,21 @@ input:focus-visible {
    Klassen-Regel für "display" sonst gleich stark wie [hidden] { display:
    none } wiegt und - da später im Stylesheet - das Verstecken lautlos
    aushebeln würde. */
-.stunden-hinzufuegen-zeile:not([hidden]) {
+.stunden-hinzufuegen-zeile:not([hidden]),
+.material-hinzufuegen-zeile:not([hidden]) {
   display: flex;
   gap: 0.4rem;
   margin-top: 0.4rem;
 }
 
-.stunden-hinzufuegen-zeile input {
+.stunden-hinzufuegen-zeile input,
+.material-hinzufuegen-zeile input {
   margin-top: 0;
   min-width: 0;
 }
 
-.stunden-hinzufuegen-ok {
+.stunden-hinzufuegen-ok,
+.material-hinzufuegen-ok {
   flex-shrink: 0;
   background: var(--accent);
   color: var(--accent-foreground);
@@ -285,6 +292,66 @@ input:focus-visible {
 
 .zeile-gesamt strong {
   color: var(--foreground);
+}
+
+.belege-bereich {
+  margin-top: 0.7rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+}
+
+.belege-vorschau {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.belege-vorschau:not(:empty) {
+  margin-bottom: 0.5rem;
+}
+
+.beleg-miniatur {
+  position: relative;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.beleg-miniatur img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.beleg-loeschen {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 1.2rem;
+  height: 1.2rem;
+  line-height: 1;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  border: none;
+  border-radius: 0 7px 0 7px;
+  font-size: 0.8rem;
+  padding: 0;
+}
+
+.beleg-upload-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.beleg-upload-label:hover {
+  color: var(--accent-strong);
 }
 
 .adresse-form {
@@ -445,5 +512,34 @@ button {
   .druck-unterschrift span {
     font-size: 9pt;
     color: #444;
+  }
+
+  .druck-belege {
+    margin-top: 24pt;
+    break-before: page;
+  }
+
+  .druck-belege h2 {
+    font-size: 13pt;
+    margin: 0 0 10pt;
+  }
+
+  .druck-beleg-block {
+    margin-bottom: 16pt;
+    break-inside: avoid;
+  }
+
+  .druck-beleg-adresse {
+    font-weight: 700;
+    font-size: 10pt;
+    margin: 0 0 5pt;
+  }
+
+  .druck-beleg-bild {
+    display: block;
+    max-width: 100%;
+    max-height: 22cm;
+    margin-bottom: 8pt;
+    break-inside: avoid;
   }
 }

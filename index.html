@@ -37,8 +37,8 @@
 
 <main>
   <p id="speicher-fehler-hinweis" class="hinweis fehler-hinweis" hidden>
-    Speichern hat nicht geklappt (z. B. privater Modus oder voller Speicher).
-    Eingaben bleiben nur bis zum Schließen der Seite erhalten.
+    Speichern hat nicht geklappt (z. B. privater Modus, voller Speicher oder
+    nicht unterstütztes Bildformat). Bitte erneut versuchen.
   </p>
 
   <section class="card">
@@ -106,10 +106,25 @@
       </label>
       <label>
         <span>Materialkosten</span>
-        <input type="number" class="material-input" min="0" step="0.01" inputmode="decimal">
+        <span class="material-eingabe-zeile">
+          <input type="number" class="material-input" min="0" step="0.01" inputmode="decimal">
+          <button type="button" class="material-plus-btn" aria-label="Materialkosten hinzufügen">+</button>
+        </span>
+        <span class="material-hinzufuegen-zeile" hidden>
+          <input type="number" class="material-hinzufuegen-input" min="0" step="0.01" inputmode="decimal" placeholder="dazu …">
+          <button type="button" class="material-hinzufuegen-ok">OK</button>
+        </span>
       </label>
     </div>
     <p class="zeile-gesamt">Gesamt: <strong class="gesamt-wert">0,00 €</strong></p>
+
+    <div class="belege-bereich">
+      <div class="belege-vorschau"></div>
+      <label class="beleg-upload-label">
+        <input type="file" class="beleg-input" accept="image/*" capture="environment" multiple hidden>
+        <span>+ Beleg (Foto/Datei)</span>
+      </label>
+    </div>
   </div>
 </template>
 

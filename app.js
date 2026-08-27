@@ -102,6 +102,255 @@
     });
   }
 
+  /**
+   * Verdrahtet den "+"-Knopf eines Feldes (Stunden oder Materialkosten):
+   * Klick blendet ein kleines Eingabefeld ein, Enter/OK addiert die dort
+   * eingegebene Zahl zum bestehenden Wert - so lassen sich Werte übers
+   * Monat verteilt nachtragen, ohne selbst rechnen zu müssen.
+   */
+  function verdrahteHinzufuegenKnopf(zeile, feldName, stammInput, knoten, praefix) {
+    var plusBtn = knoten.querySelector("." + praefix + "-plus-btn");
+    var hinzuZeile = knoten.querySelector("." + praefix + "-hinzufuegen-zeile");
+    var hinzuInput = knoten.querySelector("." + praefix + "-hinzufuegen-input");
+    var hinzuOkBtn = knoten.querySelector("." + praefix + "-hinzufuegen-ok");
+
+    function anwenden() {
+      var hinzu = zahl(hinzuInput.value);
+      if (hinzu > 0) {
+        var neu = Math.round((zahl(zeile[feldName]) + hinzu) * 100) / 100;
+        zeile[feldName] = String(neu);
+        stammInput.value = zeile[feldName];
+        speichereDaten();
+        aktualisiereAnzeige();
+      }
+      hinzuInput.value = "";
+      hinzuZeile.hidden = true;
+    }
+
+    plusBtn.addEventListener("click", function () {
+      hinzuZeile.hidden = !hinzuZeile.hidden;
+      if (!hinzuZeile.hidden) hinzuInput.focus();
+    });
+    hinzuOkBtn.addEventListener("click", anwenden);
+    hinzuInput.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        anwenden();
+      }
+    });
+  }
+
+  // Belege (Fotos von Rechnungen/Kassenzetteln) --------------------------
+  // Liegen in IndexedDB statt localStorage, weil Fotos schnell mehrere MB
+  // groß sind und localStorage-Kontingente typischerweise nur 5-10 MB
+  // erlauben. Ein In-Memory-Cache hält die Belege je Adresse-ID vor, damit
+  // Anzeige/Druckansicht wie der Rest der App synchron bleiben können.
+  var BELEGE_DB_NAME = "stundenzettel-belege";
+  var BELEGE_STORE = "belege";
+  var belegeCache = {}; // adresseId -> [{id, adresseId, dateiname, datenUrl, erstellt}, ...]
+
+  function belegeDbOeffnen() {
+    return new Promise(function (resolve, reject) {
+      var anfrage = indexedDB.open(BELEGE_DB_NAME, 1);
+      anfrage.onupgradeneeded = function () {
+        var db = anfrage.result;
+        if (!db.objectStoreNames.contains(BELEGE_STORE)) {
+          var store = db.createObjectStore(BELEGE_STORE, { keyPath: "id" });
+          store.createIndex("adresseId", "adresseId", { unique: false });
+        }
+      };
+      anfrage.onsuccess = function () {
+        resolve(anfrage.result);
+      };
+      anfrage.onerror = function () {
+        reject(anfrage.error);
+      };
+    });
+  }
+
+  async function belegHinzufuegen(adresseId, dateiname, datenUrl) {
+    var db = await belegeDbOeffnen();
+    var eintrag = {
+      id: erzeugeId(),
+      adresseId: adresseId,
+      dateiname: dateiname,
+      datenUrl: datenUrl,
+      erstellt: new Date().toISOString(),
+    };
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(BELEGE_STORE, "readwrite");
+      tx.objectStore(BELEGE_STORE).add(eintrag);
+      tx.oncomplete = function () {
+        resolve(eintrag);
+      };
+      tx.onerror = function () {
+        reject(tx.error);
+      };
+    });
+  }
+
+  async function alleBelege() {
+    var db = await belegeDbOeffnen();
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(BELEGE_STORE, "readonly");
+      var anfrage = tx.objectStore(BELEGE_STORE).getAll();
+      anfrage.onsuccess = function () {
+        resolve(anfrage.result);
+      };
+      anfrage.onerror = function () {
+        reject(anfrage.error);
+      };
+    });
+  }
+
+  async function belegLoeschen(belegId) {
+    var db = await belegeDbOeffnen();
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(BELEGE_STORE, "readwrite");
+      tx.objectStore(BELEGE_STORE).delete(belegId);
+      tx.oncomplete = function () {
+        resolve();
+      };
+      tx.onerror = function () {
+        reject(tx.error);
+      };
+    });
+  }
+
+  async function belegeLoeschenFuerIds(belegIds) {
+    if (belegIds.length === 0) return;
+    var db = await belegeDbOeffnen();
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(BELEGE_STORE, "readwrite");
+      var store = tx.objectStore(BELEGE_STORE);
+      belegIds.forEach(function (id) {
+        store.delete(id);
+      });
+      tx.oncomplete = function () {
+        resolve();
+      };
+      tx.onerror = function () {
+        reject(tx.error);
+      };
+    });
+  }
+
+  async function belegeCacheLaden() {
+    var alle = await alleBelege();
+    var neuerCache = {};
+    alle.forEach(function (beleg) {
+      if (!neuerCache[beleg.adresseId]) neuerCache[beleg.adresseId] = [];
+      neuerCache[beleg.adresseId].push(beleg);
+    });
+    belegeCache = neuerCache;
+  }
+
+  /**
+   * Verkleinert/komprimiert ein hochgeladenes Bild (Kamera-Fotos sind oft
+   * mehrere MB groß) und liefert es als JPEG-Data-URL zurück.
+   * createImageBitmap mit imageOrientation "from-image" berücksichtigt
+   * dabei die EXIF-Ausrichtung, damit Hochkant-Fotos nicht quer landen.
+   */
+  async function bildVerkleinern(datei, maxKante, qualitaet) {
+    var bitmap = await createImageBitmap(datei, { imageOrientation: "from-image" });
+    try {
+      var faktor = Math.min(1, maxKante / Math.max(bitmap.width, bitmap.height));
+      var canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(bitmap.width * faktor));
+      canvas.height = Math.max(1, Math.round(bitmap.height * faktor));
+      var ctx = canvas.getContext("2d");
+      ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/jpeg", qualitaet);
+    } finally {
+      bitmap.close();
+    }
+  }
+
+  function zeigeSpeicherFehler() {
+    var hinweis = document.getElementById("speicher-fehler-hinweis");
+    if (hinweis) hinweis.hidden = false;
+  }
+
+  function belegeVorschauRendern(container, adresseId) {
+    var belege = belegeCache[adresseId] || [];
+    container.innerHTML = "";
+    belege.forEach(function (beleg) {
+      var miniatur = document.createElement("div");
+      miniatur.className = "beleg-miniatur";
+
+      var img = document.createElement("img");
+      img.src = beleg.datenUrl;
+      img.alt = beleg.dateiname;
+      miniatur.appendChild(img);
+
+      var loeschBtn = document.createElement("button");
+      loeschBtn.type = "button";
+      loeschBtn.className = "beleg-loeschen";
+      loeschBtn.setAttribute("aria-label", "Beleg löschen");
+      loeschBtn.textContent = "×";
+      loeschBtn.addEventListener("click", function () {
+        belegLoeschen(beleg.id)
+          .then(function () {
+            belegeCache[adresseId] = (belegeCache[adresseId] || []).filter(function (b) {
+              return b.id !== beleg.id;
+            });
+            belegeVorschauRendern(container, adresseId);
+            aktualisiereAnzeige();
+          })
+          .catch(function (fehler) {
+            console.warn("Beleg konnte nicht gelöscht werden.", fehler);
+            zeigeSpeicherFehler();
+          });
+      });
+      miniatur.appendChild(loeschBtn);
+
+      container.appendChild(miniatur);
+    });
+  }
+
+  async function belegHochladen(adresseId, datei, vorschauEl, labelSpan) {
+    var urText = labelSpan.textContent;
+    labelSpan.textContent = "Wird verarbeitet …";
+    try {
+      var datenUrl = await bildVerkleinern(datei, 1600, 0.75);
+      var eintrag = await belegHinzufuegen(adresseId, datei.name, datenUrl);
+      if (!belegeCache[adresseId]) belegeCache[adresseId] = [];
+      belegeCache[adresseId].push(eintrag);
+      belegeVorschauRendern(vorschauEl, adresseId);
+      aktualisiereAnzeige();
+    } catch (fehler) {
+      console.warn("Beleg konnte nicht gespeichert werden.", fehler);
+      zeigeSpeicherFehler();
+    } finally {
+      labelSpan.textContent = urText;
+    }
+  }
+
+  async function belegeAlleLoeschen() {
+    belegeCache = {};
+    var db = await belegeDbOeffnen();
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(BELEGE_STORE, "readwrite");
+      tx.objectStore(BELEGE_STORE).clear();
+      tx.oncomplete = function () {
+        resolve();
+      };
+      tx.onerror = function () {
+        reject(tx.error);
+      };
+    });
+  }
+
+  async function belegeZuAdresseLoeschen(adresseId) {
+    var belege = belegeCache[adresseId] || [];
+    delete belegeCache[adresseId];
+    try {
+      await belegeLoeschenFuerIds(belege.map(function (b) { return b.id; }));
+    } catch (fehler) {
+      console.warn("Belege zur gelöschten Adresse konnten nicht bereinigt werden.", fehler);
+    }
+  }
+
   function ladeDaten() {
     try {
       var roh = localStorage.getItem(SPEICHER_SCHLUESSEL);
@@ -123,8 +372,7 @@
       localStorage.setItem(SPEICHER_SCHLUESSEL, JSON.stringify(daten));
     } catch (fehler) {
       console.warn("Daten konnten nicht gespeichert werden.", fehler);
-      var hinweis = document.getElementById("speicher-fehler-hinweis");
-      if (hinweis) hinweis.hidden = false;
+      zeigeSpeicherFehler();
     }
   }
 
@@ -163,32 +411,19 @@
         speichereDaten();
         aktualisiereAnzeige();
       });
-      var hinzuZeile = knoten.querySelector(".stunden-hinzufuegen-zeile");
-      var hinzuInput = knoten.querySelector(".stunden-hinzufuegen-input");
+      verdrahteHinzufuegenKnopf(zeile, "stunden", stundenInput, knoten, "stunden");
+      verdrahteHinzufuegenKnopf(zeile, "materialkosten", materialInput, knoten, "material");
 
-      function stundenHinzufuegenAnwenden() {
-        var hinzu = zahl(hinzuInput.value);
-        if (hinzu > 0) {
-          var neu = Math.round((zahl(zeile.stunden) + hinzu) * 100) / 100;
-          zeile.stunden = String(neu);
-          stundenInput.value = zeile.stunden;
-          speichereDaten();
-          aktualisiereAnzeige();
-        }
-        hinzuInput.value = "";
-        hinzuZeile.hidden = true;
-      }
-
-      knoten.querySelector(".stunden-plus-btn").addEventListener("click", function () {
-        hinzuZeile.hidden = !hinzuZeile.hidden;
-        if (!hinzuZeile.hidden) hinzuInput.focus();
-      });
-      knoten.querySelector(".stunden-hinzufuegen-ok").addEventListener("click", stundenHinzufuegenAnwenden);
-      hinzuInput.addEventListener("keydown", function (ev) {
-        if (ev.key === "Enter") {
-          ev.preventDefault();
-          stundenHinzufuegenAnwenden();
-        }
+      var belegeVorschauEl = knoten.querySelector(".belege-vorschau");
+      var belegInput = knoten.querySelector(".beleg-input");
+      var belegLabelSpan = knoten.querySelector(".beleg-upload-label span");
+      belegeVorschauRendern(belegeVorschauEl, zeile.id);
+      belegInput.addEventListener("change", function () {
+        var dateien = belegInput.files ? Array.prototype.slice.call(belegInput.files) : [];
+        belegInput.value = "";
+        dateien.forEach(function (datei) {
+          belegHochladen(zeile.id, datei, belegeVorschauEl, belegLabelSpan);
+        });
       });
 
       mitBestaetigung(knoten.querySelector(".loeschen-btn"), "Wirklich?", function () {
@@ -196,6 +431,7 @@
           return z.id !== zeile.id;
         });
         speichereDaten();
+        belegeZuAdresseLoeschen(zeile.id);
         baueListe();
         aktualisiereAnzeige();
       });
@@ -243,6 +479,27 @@
       })
       .join("");
 
+    var belegeHtml = daten.adressen
+      .map(function (zeile) {
+        var belege = belegeCache[zeile.id] || [];
+        if (belege.length === 0) return "";
+        var bilder = belege
+          .map(function (beleg) {
+            return (
+              '<img class="druck-beleg-bild" src="' + beleg.datenUrl + '" alt="' + escapeHtml(beleg.dateiname) + '">'
+            );
+          })
+          .join("");
+        return (
+          '<div class="druck-beleg-block"><p class="druck-beleg-adresse">' +
+          escapeHtml(zeile.adresse) +
+          "</p>" +
+          bilder +
+          "</div>"
+        );
+      })
+      .join("");
+
     druckansichtEl.innerHTML =
       '<div class="druck-kopf"><h1>Stundenzettel</h1><span>' +
       zeitraum +
@@ -255,7 +512,8 @@
       '</tbody><tfoot><tr><td colspan="3">Gesamtsumme</td><td class="num">' +
       euro(summe) +
       '</td></tr></tfoot></table><div class="druck-unterschrift">' +
-      '<div class="unterschrift-linie"></div><span>Datum, Unterschrift</span></div>';
+      '<div class="unterschrift-linie"></div><span>Datum, Unterschrift</span></div>' +
+      (belegeHtml ? '<div class="druck-belege"><h2>Belege</h2>' + belegeHtml + "</div>" : "");
   }
 
   monatEl.addEventListener("input", function () {
@@ -288,6 +546,9 @@
       z.materialkosten = 0;
     });
     speichereDaten();
+    belegeAlleLoeschen().catch(function (fehler) {
+      console.warn("Belege konnten beim Zurücksetzen nicht gelöscht werden.", fehler);
+    });
     baueListe();
     aktualisiereAnzeige();
   });
@@ -300,6 +561,18 @@
   stundenlohnEl.value = daten.stundenlohn;
   baueListe();
   aktualisiereAnzeige();
+
+  // Belege kommen aus IndexedDB (asynchron) nach, damit der erste Render
+  // nicht darauf warten muss - baut Liste/Druckansicht kurz danach mit den
+  // geladenen Miniaturen neu auf.
+  belegeCacheLaden()
+    .then(function () {
+      baueListe();
+      aktualisiereAnzeige();
+    })
+    .catch(function (fehler) {
+      console.warn("Belege konnten nicht geladen werden.", fehler);
+    });
 
   if ("serviceWorker" in navigator && window.isSecureContext) {
     navigator.serviceWorker.register("sw.js").catch(function () {
