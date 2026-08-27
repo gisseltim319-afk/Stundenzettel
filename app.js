@@ -27,16 +27,6 @@
     return heute.getFullYear() + "-" + String(heute.getMonth() + 1).padStart(2, "0");
   }
 
-  function standardDaten() {
-    return {
-      zeitraum: heutigerMonatWert(),
-      stundenlohn: 15,
-      adressen: STANDARD_ADRESSEN.map(function (adresse) {
-        return { id: erzeugeId(), adresse: adresse, stunden: 0, materialkosten: 0 };
-      }),
-    };
-  }
-
   /** Tippfehler-tolerant (Komma statt Punkt), negative/ungültige Eingaben werden zu 0. */
   function zahl(wert) {
     var n = Number(String(wert == null ? "" : wert).trim().replace(",", "."));
@@ -61,6 +51,14 @@
     var letzterTag = new Date(jahr, monat, 0).getDate();
     var basis = pad2(monat) + "." + jahr;
     return "01." + basis + " – " + pad2(letzterTag) + "." + basis;
+  }
+
+  /** "2026-08" -> "August 2026", für Titel/Historie. */
+  function monatLabel(monatWert) {
+    var teile = monatWert.split("-");
+    var jahr = Number(teile[0]);
+    var monatIndex = Number(teile[1]) - 1;
+    return new Date(jahr, monatIndex, 1).toLocaleDateString("de-DE", { month: "long", year: "numeric" });
   }
 
   function escapeHtml(text) {
@@ -108,7 +106,7 @@
    * eingegebene Zahl zum bestehenden Wert - so lassen sich Werte übers
    * Monat verteilt nachtragen, ohne selbst rechnen zu müssen.
    */
-  function verdrahteHinzufuegenKnopf(zeile, feldName, stammInput, knoten, praefix) {
+  function verdrahteHinzufuegenKnopf(eintrag, feldName, stammInput, knoten, praefix) {
     var plusBtn = knoten.querySelector("." + praefix + "-plus-btn");
     var hinzuZeile = knoten.querySelector("." + praefix + "-hinzufuegen-zeile");
     var hinzuInput = knoten.querySelector("." + praefix + "-hinzufuegen-input");
@@ -117,9 +115,9 @@
     function anwenden() {
       var hinzu = zahl(hinzuInput.value);
       if (hinzu > 0) {
-        var neu = Math.round((zahl(zeile[feldName]) + hinzu) * 100) / 100;
-        zeile[feldName] = String(neu);
-        stammInput.value = zeile[feldName];
+        var neu = Math.round((zahl(eintrag[feldName]) + hinzu) * 100) / 100;
+        eintrag[feldName] = String(neu);
+        stammInput.value = eintrag[feldName];
         speichereDaten();
         aktualisiereAnzeige();
       }
@@ -143,11 +141,12 @@
   // Belege (Fotos von Rechnungen/Kassenzetteln) --------------------------
   // Liegen in IndexedDB statt localStorage, weil Fotos schnell mehrere MB
   // groß sind und localStorage-Kontingente typischerweise nur 5-10 MB
-  // erlauben. Ein In-Memory-Cache hält die Belege je Adresse-ID vor, damit
-  // Anzeige/Druckansicht wie der Rest der App synchron bleiben können.
+  // erlauben. Jeder Beleg gehört zu genau einer Adresse UND einem Monat.
+  // Ein In-Memory-Cache (Monat -> Adresse-ID -> Belege) hält alles vor,
+  // damit Anzeige/Druckansicht wie der Rest der App synchron bleiben.
   var BELEGE_DB_NAME = "stundenzettel-belege";
   var BELEGE_STORE = "belege";
-  var belegeCache = {}; // adresseId -> [{id, adresseId, dateiname, datenUrl, erstellt}, ...]
+  var belegeCache = {};
 
   function belegeDbOeffnen() {
     return new Promise(function (resolve, reject) {
@@ -168,11 +167,12 @@
     });
   }
 
-  async function belegHinzufuegen(adresseId, dateiname, datenUrl) {
+  async function belegHinzufuegen(adresseId, monat, dateiname, datenUrl) {
     var db = await belegeDbOeffnen();
     var eintrag = {
       id: erzeugeId(),
       adresseId: adresseId,
+      monat: monat,
       dateiname: dateiname,
       datenUrl: datenUrl,
       erstellt: new Date().toISOString(),
@@ -235,14 +235,45 @@
     });
   }
 
+  /** Belege aus einer Version vor der Monats-Trennung haben noch kein
+   *  "monat"-Feld - die werden dem Migrations-Zielmonat zugeordnet. */
+  async function migriereBelegeOhneMonat(zielMonat) {
+    var alle = await alleBelege();
+    var ohneMonat = alle.filter(function (b) {
+      return !b.monat;
+    });
+    if (ohneMonat.length === 0) return;
+    var db = await belegeDbOeffnen();
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(BELEGE_STORE, "readwrite");
+      var store = tx.objectStore(BELEGE_STORE);
+      ohneMonat.forEach(function (b) {
+        b.monat = zielMonat;
+        store.put(b);
+      });
+      tx.oncomplete = function () {
+        resolve();
+      };
+      tx.onerror = function () {
+        reject(tx.error);
+      };
+    });
+  }
+
   async function belegeCacheLaden() {
     var alle = await alleBelege();
-    var neuerCache = {};
+    var neu = {};
     alle.forEach(function (beleg) {
-      if (!neuerCache[beleg.adresseId]) neuerCache[beleg.adresseId] = [];
-      neuerCache[beleg.adresseId].push(beleg);
+      if (!beleg.monat) return;
+      if (!neu[beleg.monat]) neu[beleg.monat] = {};
+      if (!neu[beleg.monat][beleg.adresseId]) neu[beleg.monat][beleg.adresseId] = [];
+      neu[beleg.monat][beleg.adresseId].push(beleg);
     });
-    belegeCache = neuerCache;
+    belegeCache = neu;
+  }
+
+  function belegeFuer(monat, adresseId) {
+    return (belegeCache[monat] && belegeCache[monat][adresseId]) || [];
   }
 
   /**
@@ -271,8 +302,8 @@
     if (hinweis) hinweis.hidden = false;
   }
 
-  function belegeVorschauRendern(container, adresseId) {
-    var belege = belegeCache[adresseId] || [];
+  function belegeVorschauRendern(container, adresseId, monat) {
+    var belege = belegeFuer(monat, adresseId);
     container.innerHTML = "";
     belege.forEach(function (beleg) {
       var miniatur = document.createElement("div");
@@ -291,10 +322,10 @@
       loeschBtn.addEventListener("click", function () {
         belegLoeschen(beleg.id)
           .then(function () {
-            belegeCache[adresseId] = (belegeCache[adresseId] || []).filter(function (b) {
+            belegeCache[monat][adresseId] = (belegeCache[monat][adresseId] || []).filter(function (b) {
               return b.id !== beleg.id;
             });
-            belegeVorschauRendern(container, adresseId);
+            belegeVorschauRendern(container, adresseId, monat);
             aktualisiereAnzeige();
           })
           .catch(function (fehler) {
@@ -308,15 +339,16 @@
     });
   }
 
-  async function belegHochladen(adresseId, datei, vorschauEl, labelSpan) {
+  async function belegHochladen(adresseId, monat, datei, vorschauEl, labelSpan) {
     var urText = labelSpan.textContent;
     labelSpan.textContent = "Wird verarbeitet …";
     try {
       var datenUrl = await bildVerkleinern(datei, 1600, 0.75);
-      var eintrag = await belegHinzufuegen(adresseId, datei.name, datenUrl);
-      if (!belegeCache[adresseId]) belegeCache[adresseId] = [];
-      belegeCache[adresseId].push(eintrag);
-      belegeVorschauRendern(vorschauEl, adresseId);
+      var eintrag = await belegHinzufuegen(adresseId, monat, datei.name, datenUrl);
+      if (!belegeCache[monat]) belegeCache[monat] = {};
+      if (!belegeCache[monat][adresseId]) belegeCache[monat][adresseId] = [];
+      belegeCache[monat][adresseId].push(eintrag);
+      belegeVorschauRendern(vorschauEl, adresseId, monat);
       aktualisiereAnzeige();
     } catch (fehler) {
       console.warn("Beleg konnte nicht gespeichert werden.", fehler);
@@ -326,29 +358,82 @@
     }
   }
 
-  async function belegeAlleLoeschen() {
-    belegeCache = {};
-    var db = await belegeDbOeffnen();
-    return new Promise(function (resolve, reject) {
-      var tx = db.transaction(BELEGE_STORE, "readwrite");
-      tx.objectStore(BELEGE_STORE).clear();
-      tx.oncomplete = function () {
-        resolve();
-      };
-      tx.onerror = function () {
-        reject(tx.error);
-      };
-    });
-  }
-
+  /** Löscht Belege einer Adresse über ALLE Monate hinweg (Adresse selbst wird entfernt). */
   async function belegeZuAdresseLoeschen(adresseId) {
-    var belege = belegeCache[adresseId] || [];
-    delete belegeCache[adresseId];
+    var idsZuLoeschen = [];
+    Object.keys(belegeCache).forEach(function (monat) {
+      var liste = belegeCache[monat][adresseId];
+      if (liste && liste.length > 0) {
+        idsZuLoeschen = idsZuLoeschen.concat(
+          liste.map(function (b) {
+            return b.id;
+          })
+        );
+        delete belegeCache[monat][adresseId];
+      }
+    });
     try {
-      await belegeLoeschenFuerIds(belege.map(function (b) { return b.id; }));
+      await belegeLoeschenFuerIds(idsZuLoeschen);
     } catch (fehler) {
       console.warn("Belege zur gelöschten Adresse konnten nicht bereinigt werden.", fehler);
     }
+  }
+
+  /** Löscht nur die Belege EINES Monats (für den monatsbezogenen Zurücksetzen-Knopf). */
+  async function belegeFuerMonatLoeschen(monat) {
+    var idsZuLoeschen = [];
+    if (belegeCache[monat]) {
+      Object.keys(belegeCache[monat]).forEach(function (adresseId) {
+        idsZuLoeschen = idsZuLoeschen.concat(
+          belegeCache[monat][adresseId].map(function (b) {
+            return b.id;
+          })
+        );
+      });
+    }
+    delete belegeCache[monat];
+    try {
+      await belegeLoeschenFuerIds(idsZuLoeschen);
+    } catch (fehler) {
+      console.warn("Belege konnten beim Zurücksetzen nicht gelöscht werden.", fehler);
+    }
+  }
+
+  // Daten: Adressen (Stammliste) + je Monat Stundenlohn/Einträge --------
+  function standardDaten() {
+    var monat = heutigerMonatWert();
+    var eintraege = {};
+    var adressen = STANDARD_ADRESSEN.map(function (name) {
+      var id = erzeugeId();
+      eintraege[id] = { stunden: 0, materialkosten: 0 };
+      return { id: id, adresse: name };
+    });
+    var monate = {};
+    monate[monat] = { stundenlohn: 15, eintraege: eintraege };
+    return { adressen: adressen, aktuellerMonat: monat, monate: monate };
+  }
+
+  /** Erkennt das alte, flache Format (vor der Monats-Trennung): Stunden/
+   *  Materialkosten saßen direkt an der Adresse statt in daten.monate. */
+  function istAltesFormat(geparst) {
+    return (
+      geparst &&
+      Array.isArray(geparst.adressen) &&
+      geparst.adressen.length > 0 &&
+      geparst.adressen[0].stunden !== undefined
+    );
+  }
+
+  function migriereAltesFormat(alt) {
+    var monat = alt.zeitraum || heutigerMonatWert();
+    var eintraege = {};
+    var neueAdressen = alt.adressen.map(function (a) {
+      eintraege[a.id] = { stunden: a.stunden || 0, materialkosten: a.materialkosten || 0 };
+      return { id: a.id, adresse: a.adresse };
+    });
+    var monate = {};
+    monate[monat] = { stundenlohn: alt.stundenlohn || 15, eintraege: eintraege };
+    return { adressen: neueAdressen, aktuellerMonat: monat, monate: monate };
   }
 
   function ladeDaten() {
@@ -357,7 +442,9 @@
       if (!roh) return standardDaten();
       var geparst = JSON.parse(roh);
       if (!geparst || !Array.isArray(geparst.adressen)) return standardDaten();
-      if (!geparst.zeitraum) geparst.zeitraum = heutigerMonatWert();
+      if (istAltesFormat(geparst)) return migriereAltesFormat(geparst);
+      if (!geparst.monate) geparst.monate = {};
+      if (!geparst.aktuellerMonat) geparst.aktuellerMonat = heutigerMonatWert();
       return geparst;
     } catch (fehler) {
       console.warn("Gespeicherte Daten konnten nicht gelesen werden, starte mit Standardliste.", fehler);
@@ -376,6 +463,42 @@
     }
   }
 
+  /** Stundenlohn des zuletzt bekannten Monats - Vorbelegung für neue Monate,
+   *  damit man ihn nicht jedes Mal neu eintippen muss. */
+  function letzterBekannterStundenlohn() {
+    var monate = Object.keys(daten.monate).sort();
+    if (monate.length === 0) return 15;
+    return daten.monate[monate[monate.length - 1]].stundenlohn;
+  }
+
+  function aktuellerMonatObjekt() {
+    var m = daten.aktuellerMonat;
+    if (!daten.monate[m]) {
+      daten.monate[m] = { stundenlohn: letzterBekannterStundenlohn(), eintraege: {} };
+    }
+    return daten.monate[m];
+  }
+
+  function holeEintrag(adresseId) {
+    var monatObj = aktuellerMonatObjekt();
+    if (!monatObj.eintraege[adresseId]) {
+      monatObj.eintraege[adresseId] = { stunden: 0, materialkosten: 0 };
+    }
+    return monatObj.eintraege[adresseId];
+  }
+
+  function monatsSumme(monatWert) {
+    var monatObj = daten.monate[monatWert];
+    if (!monatObj) return 0;
+    var lohn = zahl(monatObj.stundenlohn);
+    var summe = 0;
+    Object.keys(monatObj.eintraege).forEach(function (id) {
+      var e = monatObj.eintraege[id];
+      summe += zahl(e.stunden) * lohn + zahl(e.materialkosten);
+    });
+    return summe;
+  }
+
   var monatEl = document.getElementById("monat");
   var zeitraumAnzeigeEl = document.getElementById("zeitraum-anzeige");
   var stundenlohnEl = document.getElementById("stundenlohn");
@@ -384,6 +507,8 @@
   var vorlageEl = document.getElementById("zeile-vorlage");
   var gesamtsummeEl = document.getElementById("gesamtsumme");
   var druckansichtEl = document.getElementById("druckansicht");
+  var historieListeEl = document.getElementById("historie-liste");
+  var historieLeerEl = document.getElementById("historie-leer");
 
   var zeilenKnoten = {}; // id -> { gesamtWert }
 
@@ -391,87 +516,131 @@
     listeEl.innerHTML = "";
     zeilenKnoten = {};
     leerHinweisEl.hidden = daten.adressen.length > 0;
+    var monat = daten.aktuellerMonat;
 
-    daten.adressen.forEach(function (zeile) {
+    daten.adressen.forEach(function (adresse) {
       var knoten = vorlageEl.content.firstElementChild.cloneNode(true);
-      knoten.querySelector(".adresse-name").textContent = zeile.adresse;
+      knoten.querySelector(".adresse-name").textContent = adresse.adresse;
 
+      var eintrag = holeEintrag(adresse.id);
       var stundenInput = knoten.querySelector(".stunden-input");
       var materialInput = knoten.querySelector(".material-input");
-      stundenInput.value = zeile.stunden;
-      materialInput.value = zeile.materialkosten;
+      stundenInput.value = eintrag.stunden;
+      materialInput.value = eintrag.materialkosten;
 
       stundenInput.addEventListener("input", function () {
-        zeile.stunden = stundenInput.value;
+        eintrag.stunden = stundenInput.value;
         speichereDaten();
         aktualisiereAnzeige();
       });
       materialInput.addEventListener("input", function () {
-        zeile.materialkosten = materialInput.value;
+        eintrag.materialkosten = materialInput.value;
         speichereDaten();
         aktualisiereAnzeige();
       });
-      verdrahteHinzufuegenKnopf(zeile, "stunden", stundenInput, knoten, "stunden");
-      verdrahteHinzufuegenKnopf(zeile, "materialkosten", materialInput, knoten, "material");
+      verdrahteHinzufuegenKnopf(eintrag, "stunden", stundenInput, knoten, "stunden");
+      verdrahteHinzufuegenKnopf(eintrag, "materialkosten", materialInput, knoten, "material");
 
       var belegeVorschauEl = knoten.querySelector(".belege-vorschau");
       var belegInput = knoten.querySelector(".beleg-input");
       var belegLabelSpan = knoten.querySelector(".beleg-upload-label span");
-      belegeVorschauRendern(belegeVorschauEl, zeile.id);
+      belegeVorschauRendern(belegeVorschauEl, adresse.id, monat);
       belegInput.addEventListener("change", function () {
         var dateien = belegInput.files ? Array.prototype.slice.call(belegInput.files) : [];
         belegInput.value = "";
         dateien.forEach(function (datei) {
-          belegHochladen(zeile.id, datei, belegeVorschauEl, belegLabelSpan);
+          belegHochladen(adresse.id, monat, datei, belegeVorschauEl, belegLabelSpan);
         });
       });
 
       mitBestaetigung(knoten.querySelector(".loeschen-btn"), "Wirklich?", function () {
-        daten.adressen = daten.adressen.filter(function (z) {
-          return z.id !== zeile.id;
+        daten.adressen = daten.adressen.filter(function (a) {
+          return a.id !== adresse.id;
+        });
+        Object.keys(daten.monate).forEach(function (m) {
+          delete daten.monate[m].eintraege[adresse.id];
         });
         speichereDaten();
-        belegeZuAdresseLoeschen(zeile.id);
+        belegeZuAdresseLoeschen(adresse.id);
         baueListe();
         aktualisiereAnzeige();
       });
 
-      zeilenKnoten[zeile.id] = { gesamtWert: knoten.querySelector(".gesamt-wert") };
+      zeilenKnoten[adresse.id] = { gesamtWert: knoten.querySelector(".gesamt-wert") };
       listeEl.appendChild(knoten);
     });
   }
 
-  /** Rechnet Zeilen- und Gesamtsummen neu und hält die Druckansicht synchron – ohne die
-   *  Eingabefelder neu zu erzeugen, damit Fokus/Cursor beim Tippen erhalten bleibt. */
+  function historieRendern() {
+    var andereMonate = Object.keys(daten.monate)
+      .filter(function (m) {
+        return m !== daten.aktuellerMonat;
+      })
+      .sort()
+      .reverse();
+
+    historieListeEl.innerHTML = "";
+    historieLeerEl.hidden = andereMonate.length > 0;
+
+    andereMonate.forEach(function (m) {
+      var li = document.createElement("li");
+      li.className = "historie-eintrag";
+
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "historie-button";
+      button.innerHTML =
+        '<span class="historie-monat">' +
+        escapeHtml(monatLabel(m)) +
+        '</span><span class="historie-summe">' +
+        euro(monatsSumme(m)) +
+        "</span>";
+      button.addEventListener("click", function () {
+        monatEl.value = m;
+        monatWechseln();
+      });
+
+      li.appendChild(button);
+      historieListeEl.appendChild(li);
+    });
+  }
+
+  /** Rechnet Zeilen- und Gesamtsummen neu und hält Druckansicht/Historie
+   *  synchron – ohne die Eingabefelder neu zu erzeugen, damit Fokus/Cursor
+   *  beim Tippen erhalten bleibt. */
   function aktualisiereAnzeige() {
     var lohn = zahl(stundenlohnEl.value);
     var summe = 0;
 
-    daten.adressen.forEach(function (zeile) {
-      var gesamt = zahl(zeile.stunden) * lohn + zahl(zeile.materialkosten);
+    daten.adressen.forEach(function (adresse) {
+      var eintrag = holeEintrag(adresse.id);
+      var gesamt = zahl(eintrag.stunden) * lohn + zahl(eintrag.materialkosten);
       summe += gesamt;
-      var eintrag = zeilenKnoten[zeile.id];
-      if (eintrag) eintrag.gesamtWert.textContent = euro(gesamt);
+      var el = zeilenKnoten[adresse.id];
+      if (el) el.gesamtWert.textContent = euro(gesamt);
     });
 
     gesamtsummeEl.textContent = euro(summe);
-    zeitraumAnzeigeEl.textContent = zeitraumText(daten.zeitraum);
+    zeitraumAnzeigeEl.textContent = zeitraumText(daten.aktuellerMonat);
     baueDruckansicht(lohn, summe);
+    historieRendern();
   }
 
   function baueDruckansicht(lohn, summe) {
-    var zeitraum = zeitraumText(daten.zeitraum);
+    var zeitraum = zeitraumText(daten.aktuellerMonat);
+    var monat = daten.aktuellerMonat;
 
     var zeilenHtml = daten.adressen
-      .map(function (zeile) {
-        var gesamt = zahl(zeile.stunden) * lohn + zahl(zeile.materialkosten);
+      .map(function (adresse) {
+        var eintrag = holeEintrag(adresse.id);
+        var gesamt = zahl(eintrag.stunden) * lohn + zahl(eintrag.materialkosten);
         return (
           "<tr><td>" +
-          escapeHtml(zeile.adresse) +
+          escapeHtml(adresse.adresse) +
           '</td><td class="num">' +
-          zahl(zeile.stunden).toFixed(2).replace(".", ",") +
+          zahl(eintrag.stunden).toFixed(2).replace(".", ",") +
           '</td><td class="num">' +
-          euro(zahl(zeile.materialkosten)) +
+          euro(zahl(eintrag.materialkosten)) +
           '</td><td class="num">' +
           euro(gesamt) +
           "</td></tr>"
@@ -480,8 +649,8 @@
       .join("");
 
     var belegeHtml = daten.adressen
-      .map(function (zeile) {
-        var belege = belegeCache[zeile.id] || [];
+      .map(function (adresse) {
+        var belege = belegeFuer(monat, adresse.id);
         if (belege.length === 0) return "";
         var bilder = belege
           .map(function (beleg) {
@@ -492,7 +661,7 @@
           .join("");
         return (
           '<div class="druck-beleg-block"><p class="druck-beleg-adresse">' +
-          escapeHtml(zeile.adresse) +
+          escapeHtml(adresse.adresse) +
           "</p>" +
           bilder +
           "</div>"
@@ -516,14 +685,19 @@
       (belegeHtml ? '<div class="druck-belege"><h2>Belege</h2>' + belegeHtml + "</div>" : "");
   }
 
-  monatEl.addEventListener("input", function () {
-    daten.zeitraum = monatEl.value;
+  function monatWechseln() {
+    daten.aktuellerMonat = monatEl.value;
+    var monatObj = aktuellerMonatObjekt(); // legt bei Bedarf einen neuen Monat an
     speichereDaten();
+    stundenlohnEl.value = monatObj.stundenlohn;
+    baueListe();
     aktualisiereAnzeige();
-  });
+  }
+
+  monatEl.addEventListener("input", monatWechseln);
 
   stundenlohnEl.addEventListener("input", function () {
-    daten.stundenlohn = stundenlohnEl.value;
+    aktuellerMonatObjekt().stundenlohn = stundenlohnEl.value;
     speichereDaten();
     aktualisiereAnzeige();
   });
@@ -533,21 +707,22 @@
     var eingabe = document.getElementById("neue-adresse");
     var name = eingabe.value.trim();
     if (!name) return;
-    daten.adressen.push({ id: erzeugeId(), adresse: name, stunden: 0, materialkosten: 0 });
+    daten.adressen.push({ id: erzeugeId(), adresse: name });
     speichereDaten();
     eingabe.value = "";
     baueListe();
     aktualisiereAnzeige();
   });
 
-  mitBestaetigung(document.getElementById("zuruecksetzen-btn"), "Wirklich alle auf 0?", function () {
-    daten.adressen.forEach(function (z) {
-      z.stunden = 0;
-      z.materialkosten = 0;
+  mitBestaetigung(document.getElementById("zuruecksetzen-btn"), "Diesen Monat wirklich auf 0?", function () {
+    var monatObj = aktuellerMonatObjekt();
+    Object.keys(monatObj.eintraege).forEach(function (id) {
+      monatObj.eintraege[id].stunden = 0;
+      monatObj.eintraege[id].materialkosten = 0;
     });
     speichereDaten();
-    belegeAlleLoeschen().catch(function (fehler) {
-      console.warn("Belege konnten beim Zurücksetzen nicht gelöscht werden.", fehler);
+    belegeFuerMonatLoeschen(daten.aktuellerMonat).catch(function (fehler) {
+      console.warn("Zurücksetzen der Belege fehlgeschlagen.", fehler);
     });
     baueListe();
     aktualisiereAnzeige();
@@ -557,15 +732,21 @@
     window.print();
   });
 
-  monatEl.value = daten.zeitraum;
-  stundenlohnEl.value = daten.stundenlohn;
+  monatEl.value = daten.aktuellerMonat;
+  stundenlohnEl.value = aktuellerMonatObjekt().stundenlohn;
+  speichereDaten();
   baueListe();
   aktualisiereAnzeige();
 
   // Belege kommen aus IndexedDB (asynchron) nach, damit der erste Render
-  // nicht darauf warten muss - baut Liste/Druckansicht kurz danach mit den
-  // geladenen Miniaturen neu auf.
-  belegeCacheLaden()
+  // nicht darauf warten muss - baut Liste/Druckansicht/Historie kurz danach
+  // mit den geladenen Miniaturen neu auf. Erst eventuelle alte Belege ohne
+  // Monatszuordnung dem aktuellen (migrierten) Monat zuordnen.
+  migriereBelegeOhneMonat(daten.aktuellerMonat)
+    .catch(function (fehler) {
+      console.warn("Alte Belege konnten nicht migriert werden.", fehler);
+    })
+    .then(belegeCacheLaden)
     .then(function () {
       baueListe();
       aktualisiereAnzeige();
