@@ -1,0 +1,14 @@
+{
+  "name": "Stundenzettel",
+  "short_name": "Stundenzettel",
+  "description": "Stunden und Materialkosten pro Adresse eintippen, Gesamtsumme live berechnet, direkt als PDF drucken.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f6fb",
+  "theme_color": "#4c51d6",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

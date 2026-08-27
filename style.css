@@ -1,0 +1,334 @@
+:root {
+  --background: #f5f6fb;
+  --foreground: #14151d;
+  --surface: #ffffff;
+  --muted: #565a70;
+  --subtle: #8b8fa3;
+  --border: #e2e4ee;
+  --accent: #4c51d6;
+  --accent-strong: #383da8;
+  --accent-foreground: #ffffff;
+  --accent-soft: #e8e8fb;
+  --danger: #ae3131;
+  --radius: 14px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0b0c12;
+    --foreground: #eef0f8;
+    --surface: #15161f;
+    --muted: #a7abc2;
+    --subtle: #6f7387;
+    --border: #292b39;
+    --accent: #8d92f7;
+    --accent-strong: #aeb2ff;
+    --accent-foreground: #10111a;
+    --accent-soft: rgba(141, 146, 247, 0.16);
+    --danger: #f0807c;
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+}
+
+.app-header {
+  max-width: 32rem;
+  margin: 0 auto;
+  padding: calc(env(safe-area-inset-top) + 1.25rem) 1rem 0.5rem;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+main {
+  max-width: 32rem;
+  margin: 0 auto;
+  padding: 0 1rem calc(env(safe-area-inset-bottom) + 2rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  box-shadow: 0 1px 2px rgba(15, 17, 25, 0.05);
+}
+
+.wage-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-weight: 600;
+}
+
+.wage-input {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.wage-input .unit {
+  color: var(--subtle);
+  font-weight: 400;
+}
+
+input[type="number"],
+input[type="text"] {
+  font: inherit;
+  font-size: 1rem;
+  color: var(--foreground);
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.55rem 0.6rem;
+  min-width: 0;
+}
+
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+#stundenlohn {
+  width: 6rem;
+  text-align: right;
+}
+
+.adressen-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.karte-kopf {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.adresse-name {
+  font-weight: 600;
+}
+
+.loeschen-btn {
+  background: none;
+  border: none;
+  color: var(--subtle);
+  font-size: 0.85rem;
+  padding: 0.15rem 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.loeschen-btn:hover {
+  color: var(--danger);
+}
+
+.eingabe-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-top: 0.6rem;
+}
+
+.eingabe-grid label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.eingabe-grid input {
+  width: 100%;
+  margin-top: 0.3rem;
+}
+
+.zeile-gesamt {
+  margin: 0.6rem 0 0;
+  text-align: right;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.zeile-gesamt strong {
+  color: var(--foreground);
+}
+
+.adresse-form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.adresse-form input {
+  flex: 1;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.primaer,
+.adresse-form button {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  border: none;
+  border-radius: 10px;
+  padding: 0.65rem 1.1rem;
+  font-weight: 600;
+}
+
+.primaer:hover,
+.adresse-form button:hover {
+  background: var(--accent-strong);
+}
+
+.summe-karte {
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+
+.summe-zeile {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.aktionen {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.text-btn {
+  background: none;
+  border: none;
+  color: var(--subtle);
+  font-size: 0.9rem;
+  margin-left: auto;
+  padding: 0.4rem 0;
+}
+
+.text-btn:hover {
+  color: var(--danger);
+}
+
+.hinweis {
+  font-size: 0.78rem;
+  color: var(--subtle);
+  text-align: center;
+  margin: 0;
+}
+
+.druckansicht {
+  display: none;
+}
+
+@media print {
+  @page {
+    margin: 1.5cm;
+  }
+
+  body {
+    background: #fff;
+    color: #000;
+  }
+
+  .app-header,
+  main {
+    display: none !important;
+  }
+
+  .druckansicht {
+    display: block;
+  }
+
+  .druck-kopf {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-bottom: 2px solid #000;
+    padding-bottom: 0.3rem;
+    margin-bottom: 0.2rem;
+  }
+
+  .druck-kopf h1 {
+    margin: 0;
+    font-size: 20pt;
+  }
+
+  .druck-kopf span {
+    font-size: 10pt;
+  }
+
+  .druck-lohn {
+    margin: 0.3rem 0 0.9rem;
+    font-size: 10pt;
+    color: #333;
+  }
+
+  .druck-tabelle {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10.5pt;
+  }
+
+  .druck-tabelle th,
+  .druck-tabelle td {
+    padding: 5pt 4pt;
+    border-bottom: 0.75pt solid #ccc;
+    text-align: left;
+  }
+
+  .druck-tabelle th {
+    border-bottom: 1.5pt solid #000;
+  }
+
+  .druck-tabelle .num {
+    text-align: right;
+  }
+
+  .druck-tabelle tfoot td {
+    border-top: 1.5pt solid #000;
+    border-bottom: none;
+    font-weight: 700;
+    padding-top: 8pt;
+  }
+
+  .druck-unterschrift {
+    margin-top: 40pt;
+  }
+
+  .unterschrift-linie {
+    width: 200pt;
+    border-top: 0.75pt solid #666;
+    margin-bottom: 4pt;
+  }
+
+  .druck-unterschrift span {
+    font-size: 9pt;
+    color: #444;
+  }
+}

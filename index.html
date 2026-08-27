@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Stundenzettel</title>
+<meta name="description" content="Stunden und Materialkosten pro Adresse eintippen, Gesamtsumme live berechnet, direkt als PDF drucken.">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="theme-color" content="#4c51d6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Stundenzettel">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="app-header">
+  <h1>Stundenzettel</h1>
+</header>
+
+<main>
+  <section class="card">
+    <label class="wage-row">
+      <span>Stundenlohn</span>
+      <span class="wage-input">
+        <input type="number" id="stundenlohn" min="0" step="0.5" inputmode="decimal">
+        <span class="unit">€/h</span>
+      </span>
+    </label>
+  </section>
+
+  <section id="adressen-liste" class="adressen-liste" aria-label="Adressen"></section>
+
+  <p id="leer-hinweis" class="hinweis" hidden>
+    Noch keine Adressen. Füge unten deine erste Adresse hinzu.
+  </p>
+
+  <form id="adresse-hinzufuegen-form" class="card adresse-form">
+    <input type="text" id="neue-adresse" placeholder="Neue Adresse, z. B. Musterstr. 1" autocomplete="off" required>
+    <button type="submit">Hinzufügen</button>
+  </form>
+
+  <section class="card summe-karte">
+    <p class="summe-zeile"><span>Gesamtsumme</span><strong id="gesamtsumme">0,00 €</strong></p>
+  </section>
+
+  <div class="aktionen">
+    <button type="button" id="drucken-btn" class="primaer">Drucken / als PDF speichern</button>
+    <button type="button" id="zuruecksetzen-btn" class="text-btn">Zurücksetzen</button>
+  </div>
+
+  <p class="hinweis">
+    Alles wird automatisch nur auf diesem Handy/Browser gespeichert (kein Server, keine
+    Anmeldung). Zum Drucken öffnet sich der normale Druckdialog – dort direkt drucken oder
+    „Als PDF sichern“ wählen.
+  </p>
+</main>
+
+<template id="zeile-vorlage">
+  <div class="card adresse-karte">
+    <div class="karte-kopf">
+      <span class="adresse-name"></span>
+      <button type="button" class="loeschen-btn" aria-label="Adresse löschen">Löschen</button>
+    </div>
+    <div class="eingabe-grid">
+      <label>
+        <span>Stunden</span>
+        <input type="number" class="stunden-input" min="0" step="0.25" inputmode="decimal">
+      </label>
+      <label>
+        <span>Materialkosten</span>
+        <input type="number" class="material-input" min="0" step="0.01" inputmode="decimal">
+      </label>
+    </div>
+    <p class="zeile-gesamt">Gesamt: <strong class="gesamt-wert">0,00 €</strong></p>
+  </div>
+</template>
+
+<div id="druckansicht" class="druckansicht"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
