@@ -777,29 +777,47 @@
       doc.text("Belege", RAND, y);
       y += 24;
 
+      function belegMasse(beleg) {
+        var props = doc.getImageProperties(beleg.datenUrl);
+        var maxBreite = SEITENBREITE - RAND * 2;
+        var maxHoehe = 480;
+        var breite = maxBreite;
+        var hoehe = breite / (props.width / props.height);
+        if (hoehe > maxHoehe) {
+          hoehe = maxHoehe;
+          breite = hoehe * (props.width / props.height);
+        }
+        return { breite: breite, hoehe: hoehe };
+      }
+
       belegBloecke.forEach(function (block) {
-        if (y > SEITENHOEHE - RAND - 30) {
+        function zeichneAdressLabel() {
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(10);
+          doc.text(block.adresse, RAND, y);
+          y += 14;
+        }
+
+        // Vorab die Höhe des ersten Fotos einrechnen: Label nur zeichnen,
+        // wenn direkt danach auch noch dessen Anfang passt - sonst käme es
+        // allein ans Seitenende und das Foto folgt ohne erkennbaren Bezug.
+        var ersteHoehe = belegMasse(block.belege[0]).hoehe;
+        if (y + 14 + ersteHoehe > SEITENHOEHE - RAND) {
           doc.addPage();
           y = RAND;
         }
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(10);
-        doc.text(block.adresse, RAND, y);
-        y += 14;
+        zeichneAdressLabel();
 
         block.belege.forEach(function (beleg) {
-          var props = doc.getImageProperties(beleg.datenUrl);
-          var maxBreite = SEITENBREITE - RAND * 2;
-          var maxHoehe = 480;
-          var breite = maxBreite;
-          var hoehe = breite / (props.width / props.height);
-          if (hoehe > maxHoehe) {
-            hoehe = maxHoehe;
-            breite = hoehe * (props.width / props.height);
-          }
+          var masse = belegMasse(beleg);
+          var breite = masse.breite;
+          var hoehe = masse.hoehe;
           if (y + hoehe > SEITENHOEHE - RAND) {
             doc.addPage();
             y = RAND;
+            // Adresse gehört fachlich zu diesem Foto - Label auf der neuen
+            // Seite wiederholen, damit nie ein Beleg ohne Zuordnung dasteht.
+            zeichneAdressLabel();
           }
           doc.addImage(beleg.datenUrl, "JPEG", RAND, y, breite, hoehe);
           y += hoehe + 12;
