@@ -393,6 +393,11 @@ input:focus-visible {
   flex-shrink: 0;
 }
 
+.historie-aktuell {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
 .adresse-form {
   display: flex;
   gap: 0.5rem;

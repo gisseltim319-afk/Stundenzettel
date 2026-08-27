@@ -571,27 +571,44 @@
     });
   }
 
+  /** Nur Monate mit tatsächlich erfassten Daten zählen als "erstellt" - ein
+   *  Monat, den man nur kurz im Auswahlfeld durchgeblättert hat (ohne etwas
+   *  einzutragen), landet sonst als leere 0,00-€-Karteileiche in der Liste. */
+  function monatHatDaten(monatWert) {
+    var monatObj = daten.monate[monatWert];
+    if (!monatObj) return false;
+    var hatEintraege = Object.keys(monatObj.eintraege).some(function (id) {
+      var e = monatObj.eintraege[id];
+      return zahl(e.stunden) > 0 || zahl(e.materialkosten) > 0;
+    });
+    if (hatEintraege) return true;
+    var belegeDesMonats = belegeCache[monatWert] || {};
+    return Object.keys(belegeDesMonats).some(function (adresseId) {
+      return belegeDesMonats[adresseId].length > 0;
+    });
+  }
+
   function historieRendern() {
-    var andereMonate = Object.keys(daten.monate)
-      .filter(function (m) {
-        return m !== daten.aktuellerMonat;
-      })
+    var monate = Object.keys(daten.monate)
+      .filter(monatHatDaten)
       .sort()
       .reverse();
 
     historieListeEl.innerHTML = "";
-    historieLeerEl.hidden = andereMonate.length > 0;
+    historieLeerEl.hidden = monate.length > 0;
 
-    andereMonate.forEach(function (m) {
+    monate.forEach(function (m) {
+      var istAktuell = m === daten.aktuellerMonat;
       var li = document.createElement("li");
       li.className = "historie-eintrag";
 
       var button = document.createElement("button");
       button.type = "button";
-      button.className = "historie-button";
+      button.className = "historie-button" + (istAktuell ? " historie-aktuell" : "");
       button.innerHTML =
         '<span class="historie-monat">' +
         escapeHtml(monatLabel(m)) +
+        (istAktuell ? " (aktuell)" : "") +
         '</span><span class="historie-summe">' +
         euro(monatsSumme(m)) +
         "</span>";
