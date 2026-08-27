@@ -435,6 +435,20 @@
     });
   }
 
+  async function archivEintragLoeschen(id) {
+    var db = await belegeDbOeffnen();
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(PDF_ARCHIV_STORE, "readwrite");
+      tx.objectStore(PDF_ARCHIV_STORE).delete(id);
+      tx.oncomplete = function () {
+        resolve();
+      };
+      tx.onerror = function () {
+        reject(tx.error);
+      };
+    });
+  }
+
   var pdfArchivCache = []; // neueste zuerst
 
   async function pdfArchivCacheLaden() {
@@ -621,19 +635,25 @@
     pdfArchivCache.forEach(function (eintrag) {
       var li = document.createElement("li");
       li.className = "historie-eintrag";
-
-      var button = document.createElement("button");
-      button.type = "button";
-      button.className = "historie-button";
-      button.innerHTML =
+      li.innerHTML =
+        '<div class="karte-kopf">' +
+        '<button type="button" class="historie-button">' +
         '<span class="historie-info"><span class="historie-monat">' +
         escapeHtml(monatLabel(eintrag.monat)) +
         '</span><span class="historie-zeit">' +
         escapeHtml(formatiereZeitstempel(eintrag.erstellt)) +
         '</span></span><span class="historie-summe">' +
         euro(eintrag.gesamtsumme) +
-        "</span>";
-      button.addEventListener("click", function () {
+        "</span></button>" +
+        '<button type="button" class="loeschen-btn" aria-label="PDF löschen">Löschen</button>' +
+        "</div>" +
+        '<div class="bestaetigung-zeile historie-loeschen-bestaetigung" hidden>' +
+        "<span>PDF wirklich löschen?</span>" +
+        '<button type="button" class="bestaetigung-ja">Ja, löschen</button>' +
+        '<button type="button" class="bestaetigung-nein">Abbrechen</button>' +
+        "</div>";
+
+      li.querySelector(".historie-button").addEventListener("click", function () {
         fetch(eintrag.datenUrl)
           .then(function (antwort) {
             return antwort.blob();
@@ -646,7 +666,24 @@
           });
       });
 
-      li.appendChild(button);
+      mitJaNeinBestaetigung(
+        li.querySelector(".loeschen-btn"),
+        li.querySelector(".historie-loeschen-bestaetigung"),
+        function () {
+          archivEintragLoeschen(eintrag.id)
+            .then(function () {
+              pdfArchivCache = pdfArchivCache.filter(function (vorhandener) {
+                return vorhandener.id !== eintrag.id;
+              });
+              historieRendern();
+            })
+            .catch(function (fehler) {
+              console.warn("PDF konnte nicht gelöscht werden.", fehler);
+              zeigeSpeicherFehler();
+            });
+        }
+      );
+
       historieListeEl.appendChild(li);
     });
   }

@@ -34,7 +34,8 @@ anderes Gerät bedeutet einen leeren Stand.
    bleiben unberührt.
 7. **Historie** (unten) listet alle bislang erstellten PDFs, neueste
    zuerst, mit Monat, Zeitpunkt und Gesamtsumme – Klick öffnet die
-   jeweilige PDF erneut.
+   jeweilige PDF erneut, „Löschen" entfernt einen Eintrag dauerhaft
+   (fragt mit Ja/Nein nach).
 
 ## Auf dem Handy installieren
 
