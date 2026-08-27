@@ -268,12 +268,43 @@ input:focus-visible {
   font-weight: 600;
 }
 
-/* Zwei-Schritte-Bestätigung statt nativer confirm()-Dialoge, die in
-   mancher installierten PWA lautlos ignoriert werden: erster Klick
-   "bewaffnet" den Knopf (dieser Zustand), zweiter Klick führt aus. */
-.confirm-armiert {
-  color: var(--danger) !important;
+/* Eigene Ja/Nein-Zeile statt nativem confirm() (das manche installierten
+   PWA-Browser lautlos ignorieren): :not([hidden]) statt display direkt zu
+   setzen, weil eine Klassen-Regel für "display" sonst gleich stark wie
+   [hidden] { display: none } wiegt und - da später im Stylesheet - das
+   Verstecken lautlos aushebeln würde (siehe gleiches Problem weiter unten
+   bei .stunden-hinzufuegen-zeile). */
+.bestaetigung-zeile:not([hidden]) {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.bestaetigung-zeile span {
+  font-size: 0.85rem;
   font-weight: 600;
+  color: var(--danger);
+}
+
+.bestaetigung-ja {
+  background: var(--danger);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.bestaetigung-nein {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.85rem;
+  color: var(--muted);
 }
 
 .fehler-hinweis {

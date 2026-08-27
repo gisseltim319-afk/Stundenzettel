@@ -78,6 +78,11 @@
     <button type="button" id="drucken-btn" class="primaer">Drucken / als PDF speichern</button>
     <button type="button" id="zuruecksetzen-btn" class="text-btn">Zurücksetzen</button>
   </div>
+  <div id="zuruecksetzen-bestaetigung" class="bestaetigung-zeile" hidden>
+    <span>Diesen Monat wirklich auf 0 setzen?</span>
+    <button type="button" class="bestaetigung-ja">Ja, zurücksetzen</button>
+    <button type="button" class="bestaetigung-nein">Abbrechen</button>
+  </div>
 
   <p class="hinweis">
     Alles wird automatisch nur auf diesem Handy/Browser gespeichert (kein Server, keine
@@ -97,6 +102,11 @@
     <div class="karte-kopf">
       <span class="adresse-name"></span>
       <button type="button" class="loeschen-btn" aria-label="Adresse löschen">Löschen</button>
+    </div>
+    <div class="bestaetigung-zeile loeschen-bestaetigung" hidden>
+      <span>Adresse wirklich löschen?</span>
+      <button type="button" class="bestaetigung-ja">Ja, löschen</button>
+      <button type="button" class="bestaetigung-nein">Abbrechen</button>
     </div>
     <div class="eingabe-grid">
       <label>

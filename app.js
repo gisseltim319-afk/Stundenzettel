@@ -68,36 +68,30 @@
   }
 
   /**
-   * Macht aus einem Klick eine Zwei-Schritte-Bestätigung, ohne natives
-   * confirm(): manche als installierte App gestartete Browser ignorieren
-   * confirm()/prompt() lautlos, sodass gar nichts passiert. Erster Klick
-   * "bewaffnet" den Knopf (Text wechselt, class confirm-armiert), zweiter
-   * Klick innerhalb von 3 Sekunden führt die Aktion aus; sonst fällt der
-   * Knopf von selbst zurück.
+   * Zeigt statt eines nativen confirm() (das manche installierten
+   * PWA-Browser lautlos ignorieren, sodass gar nichts passiert) eine
+   * eigene Ja/Nein-Zeile: Klick auf "trigger" blendet ihn aus und die
+   * Bestätigungszeile ein, "Ja" führt die Aktion aus, "Nein" bricht ab -
+   * beides blendet danach wieder zum Ausgangszustand zurück.
    */
-  function mitBestaetigung(button, bestaetigungsText, aktion) {
-    var urText = button.textContent;
-    var armiert = false;
-    var timeoutId = null;
+  function mitJaNeinBestaetigung(trigger, bestaetigungsZeile, aktion) {
+    var jaBtn = bestaetigungsZeile.querySelector(".bestaetigung-ja");
+    var neinBtn = bestaetigungsZeile.querySelector(".bestaetigung-nein");
 
-    button.addEventListener("click", function () {
-      if (armiert) {
-        armiert = false;
-        clearTimeout(timeoutId);
-        button.textContent = urText;
-        button.classList.remove("confirm-armiert");
-        aktion();
-        return;
-      }
-      armiert = true;
-      button.textContent = bestaetigungsText;
-      button.classList.add("confirm-armiert");
-      timeoutId = setTimeout(function () {
-        armiert = false;
-        button.textContent = urText;
-        button.classList.remove("confirm-armiert");
-      }, 3000);
+    function abbrechen() {
+      bestaetigungsZeile.hidden = true;
+      trigger.hidden = false;
+    }
+
+    trigger.addEventListener("click", function () {
+      trigger.hidden = true;
+      bestaetigungsZeile.hidden = false;
     });
+    jaBtn.addEventListener("click", function () {
+      abbrechen();
+      aktion();
+    });
+    neinBtn.addEventListener("click", abbrechen);
   }
 
   /**
@@ -553,7 +547,7 @@
         });
       });
 
-      mitBestaetigung(knoten.querySelector(".loeschen-btn"), "Wirklich?", function () {
+      mitJaNeinBestaetigung(knoten.querySelector(".loeschen-btn"), knoten.querySelector(".loeschen-bestaetigung"), function () {
         daten.adressen = daten.adressen.filter(function (a) {
           return a.id !== adresse.id;
         });
@@ -731,19 +725,23 @@
     aktualisiereAnzeige();
   });
 
-  mitBestaetigung(document.getElementById("zuruecksetzen-btn"), "Diesen Monat wirklich auf 0?", function () {
-    var monatObj = aktuellerMonatObjekt();
-    Object.keys(monatObj.eintraege).forEach(function (id) {
-      monatObj.eintraege[id].stunden = 0;
-      monatObj.eintraege[id].materialkosten = 0;
-    });
-    speichereDaten();
-    belegeFuerMonatLoeschen(daten.aktuellerMonat).catch(function (fehler) {
-      console.warn("Zurücksetzen der Belege fehlgeschlagen.", fehler);
-    });
-    baueListe();
-    aktualisiereAnzeige();
-  });
+  mitJaNeinBestaetigung(
+    document.getElementById("zuruecksetzen-btn"),
+    document.getElementById("zuruecksetzen-bestaetigung"),
+    function () {
+      var monatObj = aktuellerMonatObjekt();
+      Object.keys(monatObj.eintraege).forEach(function (id) {
+        monatObj.eintraege[id].stunden = 0;
+        monatObj.eintraege[id].materialkosten = 0;
+      });
+      speichereDaten();
+      belegeFuerMonatLoeschen(daten.aktuellerMonat).catch(function (fehler) {
+        console.warn("Zurücksetzen der Belege fehlgeschlagen.", fehler);
+      });
+      baueListe();
+      aktualisiereAnzeige();
+    }
+  );
 
   document.getElementById("drucken-btn").addEventListener("click", function () {
     window.print();
