@@ -418,15 +418,21 @@ input:focus-visible {
   border-color: var(--accent);
 }
 
+.historie-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.historie-monat {
+  font-weight: 600;
+}
+
 .historie-summe {
   color: var(--muted);
   font-weight: 600;
   flex-shrink: 0;
-}
-
-.historie-aktuell {
-  border-color: var(--accent);
-  background: var(--accent-soft);
 }
 
 .adresse-form {
@@ -499,122 +505,9 @@ button {
   margin: 0;
 }
 
-.druckansicht {
-  display: none;
-}
-
-@media print {
-  @page {
-    margin: 1.5cm;
-  }
-
-  body {
-    background: #fff;
-    color: #000;
-  }
-
-  .app-header,
-  main {
-    display: none !important;
-  }
-
-  .druckansicht {
-    display: block;
-  }
-
-  .druck-kopf {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    border-bottom: 2px solid #000;
-    padding-bottom: 0.3rem;
-    margin-bottom: 0.2rem;
-  }
-
-  .druck-kopf h1 {
-    margin: 0;
-    font-size: 20pt;
-  }
-
-  .druck-kopf span {
-    font-size: 10pt;
-  }
-
-  .druck-lohn {
-    margin: 0.3rem 0 0.9rem;
-    font-size: 10pt;
-    color: #333;
-  }
-
-  .druck-tabelle {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 10.5pt;
-  }
-
-  .druck-tabelle th,
-  .druck-tabelle td {
-    padding: 5pt 4pt;
-    border-bottom: 0.75pt solid #ccc;
-    text-align: left;
-  }
-
-  .druck-tabelle th {
-    border-bottom: 1.5pt solid #000;
-  }
-
-  .druck-tabelle .num {
-    text-align: right;
-  }
-
-  .druck-tabelle tfoot td {
-    border-top: 1.5pt solid #000;
-    border-bottom: none;
-    font-weight: 700;
-    padding-top: 8pt;
-  }
-
-  .druck-unterschrift {
-    margin-top: 40pt;
-  }
-
-  .unterschrift-linie {
-    width: 200pt;
-    border-top: 0.75pt solid #666;
-    margin-bottom: 4pt;
-  }
-
-  .druck-unterschrift span {
-    font-size: 9pt;
-    color: #444;
-  }
-
-  .druck-belege {
-    margin-top: 24pt;
-    break-before: page;
-  }
-
-  .druck-belege h2 {
-    font-size: 13pt;
-    margin: 0 0 10pt;
-  }
-
-  .druck-beleg-block {
-    margin-bottom: 16pt;
-    break-inside: avoid;
-  }
-
-  .druck-beleg-adresse {
-    font-weight: 700;
-    font-size: 10pt;
-    margin: 0 0 5pt;
-  }
-
-  .druck-beleg-bild {
-    display: block;
-    max-width: 100%;
-    max-height: 22cm;
-    margin-bottom: 8pt;
-    break-inside: avoid;
-  }
+.historie-zeit {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--subtle);
+  font-weight: 400;
 }

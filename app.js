@@ -132,24 +132,29 @@
     });
   }
 
-  // Belege (Fotos von Rechnungen/Kassenzetteln) --------------------------
-  // Liegen in IndexedDB statt localStorage, weil Fotos schnell mehrere MB
-  // groß sind und localStorage-Kontingente typischerweise nur 5-10 MB
-  // erlauben. Jeder Beleg gehört zu genau einer Adresse UND einem Monat.
-  // Ein In-Memory-Cache (Monat -> Adresse-ID -> Belege) hält alles vor,
-  // damit Anzeige/Druckansicht wie der Rest der App synchron bleiben.
+  // Belege (Fotos von Rechnungen/Kassenzetteln) + PDF-Archiv --------------
+  // Beides liegt in IndexedDB statt localStorage, weil Fotos/PDFs schnell
+  // mehrere MB groß sind und localStorage-Kontingente typischerweise nur
+  // 5-10 MB erlauben. Jeder Beleg gehört zu genau einer Adresse UND einem
+  // Monat. Ein In-Memory-Cache (Monat -> Adresse-ID -> Belege) hält alles
+  // vor, damit Anzeige/PDF-Erzeugung wie der Rest der App synchron bleiben.
   var BELEGE_DB_NAME = "stundenzettel-belege";
   var BELEGE_STORE = "belege";
+  var PDF_ARCHIV_STORE = "pdf_archiv";
+  var DB_VERSION = 2;
   var belegeCache = {};
 
   function belegeDbOeffnen() {
     return new Promise(function (resolve, reject) {
-      var anfrage = indexedDB.open(BELEGE_DB_NAME, 1);
+      var anfrage = indexedDB.open(BELEGE_DB_NAME, DB_VERSION);
       anfrage.onupgradeneeded = function () {
         var db = anfrage.result;
         if (!db.objectStoreNames.contains(BELEGE_STORE)) {
           var store = db.createObjectStore(BELEGE_STORE, { keyPath: "id" });
           store.createIndex("adresseId", "adresseId", { unique: false });
+        }
+        if (!db.objectStoreNames.contains(PDF_ARCHIV_STORE)) {
+          db.createObjectStore(PDF_ARCHIV_STORE, { keyPath: "id" });
         }
       };
       anfrage.onsuccess = function () {
@@ -393,6 +398,63 @@
     }
   }
 
+  /** Speichert ein erzeugtes PDF dauerhaft im Archiv (eigener Eintrag pro
+   *  Erstellung, damit spätere Korrekturen ältere Versionen nicht überschreiben). */
+  async function archivHinzufuegen(monat, gesamtsumme, blob) {
+    var db = await belegeDbOeffnen();
+    var eintrag = {
+      id: erzeugeId(),
+      monat: monat,
+      gesamtsumme: gesamtsumme,
+      erstellt: new Date().toISOString(),
+      blob: blob,
+    };
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(PDF_ARCHIV_STORE, "readwrite");
+      tx.objectStore(PDF_ARCHIV_STORE).add(eintrag);
+      tx.oncomplete = function () {
+        resolve(eintrag);
+      };
+      tx.onerror = function () {
+        reject(tx.error);
+      };
+    });
+  }
+
+  async function alleArchivEintraege() {
+    var db = await belegeDbOeffnen();
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(PDF_ARCHIV_STORE, "readonly");
+      var anfrage = tx.objectStore(PDF_ARCHIV_STORE).getAll();
+      anfrage.onsuccess = function () {
+        resolve(anfrage.result);
+      };
+      anfrage.onerror = function () {
+        reject(anfrage.error);
+      };
+    });
+  }
+
+  var pdfArchivCache = []; // neueste zuerst
+
+  async function pdfArchivCacheLaden() {
+    var alle = await alleArchivEintraege();
+    alle.sort(function (a, b) {
+      return b.erstellt.localeCompare(a.erstellt);
+    });
+    pdfArchivCache = alle;
+  }
+
+  function formatiereZeitstempel(isoString) {
+    var d = new Date(isoString);
+    return (
+      d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }) +
+      ", " +
+      d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) +
+      " Uhr"
+    );
+  }
+
   // Daten: Adressen (Stammliste) + je Monat Stundenlohn/Einträge --------
   function standardDaten() {
     var monat = heutigerMonatWert();
@@ -481,18 +543,6 @@
     return monatObj.eintraege[adresseId];
   }
 
-  function monatsSumme(monatWert) {
-    var monatObj = daten.monate[monatWert];
-    if (!monatObj) return 0;
-    var lohn = zahl(monatObj.stundenlohn);
-    var summe = 0;
-    Object.keys(monatObj.eintraege).forEach(function (id) {
-      var e = monatObj.eintraege[id];
-      summe += zahl(e.stunden) * lohn + zahl(e.materialkosten);
-    });
-    return summe;
-  }
-
   var monatEl = document.getElementById("monat");
   var zeitraumAnzeigeEl = document.getElementById("zeitraum-anzeige");
   var stundenlohnEl = document.getElementById("stundenlohn");
@@ -500,7 +550,6 @@
   var leerHinweisEl = document.getElementById("leer-hinweis");
   var vorlageEl = document.getElementById("zeile-vorlage");
   var gesamtsummeEl = document.getElementById("gesamtsumme");
-  var druckansichtEl = document.getElementById("druckansicht");
   var historieListeEl = document.getElementById("historie-liste");
   var historieLeerEl = document.getElementById("historie-leer");
 
@@ -565,50 +614,28 @@
     });
   }
 
-  /** Nur Monate mit tatsächlich erfassten Daten zählen als "erstellt" - ein
-   *  Monat, den man nur kurz im Auswahlfeld durchgeblättert hat (ohne etwas
-   *  einzutragen), landet sonst als leere 0,00-€-Karteileiche in der Liste. */
-  function monatHatDaten(monatWert) {
-    var monatObj = daten.monate[monatWert];
-    if (!monatObj) return false;
-    var hatEintraege = Object.keys(monatObj.eintraege).some(function (id) {
-      var e = monatObj.eintraege[id];
-      return zahl(e.stunden) > 0 || zahl(e.materialkosten) > 0;
-    });
-    if (hatEintraege) return true;
-    var belegeDesMonats = belegeCache[monatWert] || {};
-    return Object.keys(belegeDesMonats).some(function (adresseId) {
-      return belegeDesMonats[adresseId].length > 0;
-    });
-  }
-
   function historieRendern() {
-    var monate = Object.keys(daten.monate)
-      .filter(monatHatDaten)
-      .sort()
-      .reverse();
-
     historieListeEl.innerHTML = "";
-    historieLeerEl.hidden = monate.length > 0;
+    historieLeerEl.hidden = pdfArchivCache.length > 0;
 
-    monate.forEach(function (m) {
-      var istAktuell = m === daten.aktuellerMonat;
+    pdfArchivCache.forEach(function (eintrag) {
       var li = document.createElement("li");
       li.className = "historie-eintrag";
 
       var button = document.createElement("button");
       button.type = "button";
-      button.className = "historie-button" + (istAktuell ? " historie-aktuell" : "");
+      button.className = "historie-button";
       button.innerHTML =
-        '<span class="historie-monat">' +
-        escapeHtml(monatLabel(m)) +
-        (istAktuell ? " (aktuell)" : "") +
-        '</span><span class="historie-summe">' +
-        euro(monatsSumme(m)) +
+        '<span class="historie-info"><span class="historie-monat">' +
+        escapeHtml(monatLabel(eintrag.monat)) +
+        '</span><span class="historie-zeit">' +
+        escapeHtml(formatiereZeitstempel(eintrag.erstellt)) +
+        '</span></span><span class="historie-summe">' +
+        euro(eintrag.gesamtsumme) +
         "</span>";
       button.addEventListener("click", function () {
-        monatEl.value = m;
-        monatWechseln();
+        var url = URL.createObjectURL(eintrag.blob);
+        window.open(url, "_blank");
       });
 
       li.appendChild(button);
@@ -633,67 +660,139 @@
 
     gesamtsummeEl.textContent = euro(summe);
     zeitraumAnzeigeEl.textContent = zeitraumText(daten.aktuellerMonat);
-    baueDruckansicht(lohn, summe);
-    historieRendern();
   }
 
-  function baueDruckansicht(lohn, summe) {
-    var zeitraum = zeitraumText(daten.aktuellerMonat);
+  /** Baut das PDF für den aktuellen Monat mit jsPDF (Tabelle + Belege als
+   *  eigene Seite(n)) und liefert es als Blob zusammen mit der Gesamtsumme,
+   *  die zusammen mit dem PDF im Archiv landet. */
+  function erzeugePdf() {
     var monat = daten.aktuellerMonat;
+    var lohn = zahl(stundenlohnEl.value);
+    var zeitraum = zeitraumText(monat);
 
-    var zeilenHtml = daten.adressen
-      .map(function (adresse) {
-        var eintrag = holeEintrag(adresse.id);
-        var gesamt = zahl(eintrag.stunden) * lohn + zahl(eintrag.materialkosten);
-        return (
-          "<tr><td>" +
-          escapeHtml(adresse.adresse) +
-          '</td><td class="num">' +
-          zahl(eintrag.stunden).toFixed(2).replace(".", ",") +
-          '</td><td class="num">' +
-          euro(zahl(eintrag.materialkosten)) +
-          '</td><td class="num">' +
-          euro(gesamt) +
-          "</td></tr>"
-        );
-      })
-      .join("");
+    var SEITENBREITE = 595.28; // A4 in pt
+    var SEITENHOEHE = 841.89;
+    var RAND = 50;
+    var STUNDEN_X = RAND + 295;
+    var MATERIAL_X = RAND + 395;
+    var GESAMT_X = SEITENBREITE - RAND;
 
-    var belegeHtml = daten.adressen
-      .map(function (adresse) {
-        var belege = belegeFuer(monat, adresse.id);
-        if (belege.length === 0) return "";
-        var bilder = belege
-          .map(function (beleg) {
-            return (
-              '<img class="druck-beleg-bild" src="' + beleg.datenUrl + '" alt="' + escapeHtml(beleg.dateiname) + '">'
-            );
-          })
-          .join("");
-        return (
-          '<div class="druck-beleg-block"><p class="druck-beleg-adresse">' +
-          escapeHtml(adresse.adresse) +
-          "</p>" +
-          bilder +
-          "</div>"
-        );
-      })
-      .join("");
+    var doc = new window.jspdf.jsPDF({ unit: "pt", format: "a4" });
+    var y = RAND;
 
-    druckansichtEl.innerHTML =
-      '<div class="druck-kopf"><h1>Stundenzettel</h1><span>' +
-      zeitraum +
-      '</span></div><p class="druck-lohn">Stundenlohn: ' +
-      euro(lohn) +
-      ' / Stunde</p><table class="druck-tabelle"><thead><tr><th>Adresse</th>' +
-      '<th class="num">Stunden</th><th class="num">Material</th><th class="num">Gesamt</th>' +
-      "</tr></thead><tbody>" +
-      zeilenHtml +
-      '</tbody><tfoot><tr><td colspan="3">Gesamtsumme</td><td class="num">' +
-      euro(summe) +
-      '</td></tr></tfoot></table><div class="druck-unterschrift">' +
-      '<div class="unterschrift-linie"></div><span>Datum, Unterschrift</span></div>' +
-      (belegeHtml ? '<div class="druck-belege"><h2>Belege</h2>' + belegeHtml + "</div>" : "");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(20);
+    doc.text("Stundenzettel", RAND, y);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(zeitraum, GESAMT_X, y, { align: "right" });
+    y += 8;
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(1.2);
+    doc.line(RAND, y, SEITENBREITE - RAND, y);
+    y += 16;
+    doc.setTextColor(90, 90, 100);
+    doc.text("Stundenlohn: " + euro(lohn) + " / Stunde", RAND, y);
+    doc.setTextColor(20, 20, 20);
+    y += 20;
+
+    doc.setFont("helvetica", "bold");
+    doc.text("Adresse", RAND, y);
+    doc.text("Stunden", STUNDEN_X, y, { align: "right" });
+    doc.text("Material", MATERIAL_X, y, { align: "right" });
+    doc.text("Gesamt", GESAMT_X, y, { align: "right" });
+    y += 6;
+    doc.setLineWidth(0.75);
+    doc.setDrawColor(0, 0, 0);
+    doc.line(RAND, y, SEITENBREITE - RAND, y);
+    y += 16;
+
+    doc.setFont("helvetica", "normal");
+    var summe = 0;
+    var belegBloecke = [];
+    daten.adressen.forEach(function (adresse) {
+      var eintrag = holeEintrag(adresse.id);
+      var gesamt = zahl(eintrag.stunden) * lohn + zahl(eintrag.materialkosten);
+      summe += gesamt;
+
+      if (y > SEITENHOEHE - RAND - 20) {
+        doc.addPage();
+        y = RAND;
+      }
+      doc.text(adresse.adresse, RAND, y);
+      doc.text(zahl(eintrag.stunden).toFixed(2).replace(".", ","), STUNDEN_X, y, { align: "right" });
+      doc.text(euro(zahl(eintrag.materialkosten)), MATERIAL_X, y, { align: "right" });
+      doc.text(euro(gesamt), GESAMT_X, y, { align: "right" });
+      y += 20;
+
+      var belege = belegeFuer(monat, adresse.id);
+      if (belege.length > 0) belegBloecke.push({ adresse: adresse.adresse, belege: belege });
+    });
+
+    y += 4;
+    doc.setLineWidth(1.2);
+    doc.line(RAND, y, SEITENBREITE - RAND, y);
+    y += 20;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("Gesamtsumme", MATERIAL_X, y, { align: "right" });
+    doc.text(euro(summe), GESAMT_X, y, { align: "right" });
+
+    y += 50;
+    if (y > SEITENHOEHE - RAND - 30) {
+      doc.addPage();
+      y = RAND;
+    }
+    doc.setLineWidth(0.75);
+    doc.setDrawColor(100, 100, 100);
+    doc.line(RAND, y, RAND + 200, y);
+    y += 12;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(80, 80, 90);
+    doc.text("Datum, Unterschrift", RAND, y);
+
+    if (belegBloecke.length > 0) {
+      doc.addPage();
+      y = RAND;
+      doc.setTextColor(20, 20, 20);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.text("Belege", RAND, y);
+      y += 24;
+
+      belegBloecke.forEach(function (block) {
+        if (y > SEITENHOEHE - RAND - 30) {
+          doc.addPage();
+          y = RAND;
+        }
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.text(block.adresse, RAND, y);
+        y += 14;
+
+        block.belege.forEach(function (beleg) {
+          var props = doc.getImageProperties(beleg.datenUrl);
+          var maxBreite = SEITENBREITE - RAND * 2;
+          var maxHoehe = 480;
+          var breite = maxBreite;
+          var hoehe = breite / (props.width / props.height);
+          if (hoehe > maxHoehe) {
+            hoehe = maxHoehe;
+            breite = hoehe * (props.width / props.height);
+          }
+          if (y + hoehe > SEITENHOEHE - RAND) {
+            doc.addPage();
+            y = RAND;
+          }
+          doc.addImage(beleg.datenUrl, "JPEG", RAND, y, breite, hoehe);
+          y += hoehe + 12;
+        });
+        y += 6;
+      });
+    }
+
+    return { blob: doc.output("blob"), gesamtsumme: summe };
   }
 
   function monatWechseln() {
@@ -743,8 +842,29 @@
     }
   );
 
-  document.getElementById("drucken-btn").addEventListener("click", function () {
-    window.print();
+  var druckenBtn = document.getElementById("drucken-btn");
+  druckenBtn.addEventListener("click", function () {
+    var urText = druckenBtn.textContent;
+    druckenBtn.disabled = true;
+    druckenBtn.textContent = "Wird erstellt …";
+    Promise.resolve()
+      .then(function () {
+        var ergebnis = erzeugePdf();
+        return archivHinzufuegen(daten.aktuellerMonat, ergebnis.gesamtsumme, ergebnis.blob);
+      })
+      .then(function (eintrag) {
+        pdfArchivCache.unshift(eintrag);
+        historieRendern();
+        window.open(URL.createObjectURL(eintrag.blob), "_blank");
+      })
+      .catch(function (fehler) {
+        console.warn("PDF konnte nicht erstellt werden.", fehler);
+        zeigeSpeicherFehler();
+      })
+      .finally(function () {
+        druckenBtn.disabled = false;
+        druckenBtn.textContent = urText;
+      });
   });
 
   monatEl.value = daten.aktuellerMonat;
@@ -753,21 +873,24 @@
   baueListe();
   aktualisiereAnzeige();
 
-  // Belege kommen aus IndexedDB (asynchron) nach, damit der erste Render
-  // nicht darauf warten muss - baut Liste/Druckansicht/Historie kurz danach
-  // mit den geladenen Miniaturen neu auf. Erst eventuelle alte Belege ohne
-  // Monatszuordnung dem aktuellen (migrierten) Monat zuordnen.
+  // Belege/PDF-Archiv kommen aus IndexedDB (asynchron) nach, damit der
+  // erste Render nicht darauf warten muss - bauen Liste/Historie kurz
+  // danach mit den geladenen Daten neu auf. Erst eventuelle alte Belege
+  // ohne Monatszuordnung dem aktuellen (migrierten) Monat zuordnen.
   migriereBelegeOhneMonat(daten.aktuellerMonat)
     .catch(function (fehler) {
       console.warn("Alte Belege konnten nicht migriert werden.", fehler);
     })
-    .then(belegeCacheLaden)
+    .then(function () {
+      return Promise.all([belegeCacheLaden(), pdfArchivCacheLaden()]);
+    })
     .then(function () {
       baueListe();
       aktualisiereAnzeige();
+      historieRendern();
     })
     .catch(function (fehler) {
-      console.warn("Belege konnten nicht geladen werden.", fehler);
+      console.warn("Belege/Archiv konnten nicht geladen werden.", fehler);
     });
 
   if ("serviceWorker" in navigator && window.isSecureContext) {

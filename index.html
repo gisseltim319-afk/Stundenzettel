@@ -75,7 +75,7 @@
   </section>
 
   <div class="aktionen">
-    <button type="button" id="drucken-btn" class="primaer">Drucken / als PDF speichern</button>
+    <button type="button" id="drucken-btn" class="primaer">Als PDF erstellen</button>
     <button type="button" id="zuruecksetzen-btn" class="text-btn">Zurücksetzen</button>
   </div>
   <div id="zuruecksetzen-bestaetigung" class="bestaetigung-zeile" hidden>
@@ -86,14 +86,14 @@
 
   <p class="hinweis">
     Alles wird automatisch nur auf diesem Handy/Browser gespeichert (kein Server, keine
-    Anmeldung). Jeder Monat hat eigene Werte. Zum Drucken öffnet sich der normale
-    Druckdialog – dort direkt drucken oder „Als PDF sichern“ wählen.
+    Anmeldung). Jeder Monat hat eigene Werte. „Als PDF erstellen“ öffnet die fertige PDF
+    und legt sie dauerhaft in der Historie ab – dort dann direkt drucken oder teilen.
   </p>
 
   <section class="card historie-karte">
     <h2>Historie</h2>
     <ul id="historie-liste" class="historie-liste"></ul>
-    <p id="historie-leer" class="hinweis" hidden>Noch keine Daten erfasst.</p>
+    <p id="historie-leer" class="hinweis" hidden>Noch keine PDFs erstellt.</p>
   </section>
 </main>
 
@@ -144,8 +144,7 @@
   </div>
 </template>
 
-<div id="druckansicht" class="druckansicht"></div>
-
+<script src="jspdf.umd.min.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

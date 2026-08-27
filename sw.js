@@ -4,12 +4,13 @@
 // aus dem Cache zurückfallen. Alle Nutzdaten liegen ohnehin nur in
 // localStorage, nicht auf einem Server – hier geht es nur um die
 // statischen Dateien selbst.
-var CACHE_NAME = "stundenzettel-cache-v3";
+var CACHE_NAME = "stundenzettel-cache-v4";
 var DATEIEN = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
+  "./jspdf.umd.min.js",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
